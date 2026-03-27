@@ -46,12 +46,12 @@ export default function AlphabetScriptHub() {
     <div className="min-h-screen flex flex-col" style={{ background: '#0C0A08' }}>
       <header className="flex items-center justify-between px-6 py-4"
         style={{ borderBottom: '1px solid #1E1A15' }}>
-        <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+        <Link to="/hub" style={{ textDecoration: 'none' }}>
           <span className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
             poly<span style={{ color: '#C8920A' }}>g</span>lot
           </span>
         </Link>
-        <Link to="/vocabulary"
+        <Link to="/hub"
           style={{ color: '#4A3F35', textDecoration: 'none', fontSize: '13px', fontFamily: 'inherit' }}>
           {t('back')}
         </Link>

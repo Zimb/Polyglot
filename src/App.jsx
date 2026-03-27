@@ -7,10 +7,12 @@ import Hub from './pages/Hub'
 import Links from './pages/Links'
 import AlphabetScriptHub from './pages/AlphabetScriptHub'
 import AlphabetFlashcard from './pages/AlphabetFlashcard'
+import FillBlank from './pages/FillBlank'
+import Adventure from './pages/Adventure'
 
 function RootRedirect() {
   const { nativeLang, targetLang } = useAppStore()
-  return <Navigate to={nativeLang && targetLang ? '/vocabulary' : '/setup'} replace />
+  return <Navigate to={nativeLang && targetLang ? '/hub' : '/setup'} replace />
 }
 
 export default function App() {
@@ -19,12 +21,14 @@ export default function App() {
       <Routes>
         <Route path="/" element={<RootRedirect />} />
         <Route path="/setup" element={<LangSetup />} />
-        <Route path="/vocabulary" element={<Hub />} />
+        <Route path="/hub" element={<Hub />} />
         <Route path="/flashcards" element={<Vocabulary />} />
         <Route path="/links" element={<Links />} />
         <Route path="/alphabet/:scriptId" element={<AlphabetScriptHub />} />
         <Route path="/alphabet/:scriptId/flashcards" element={<AlphabetFlashcard />} />
         <Route path="/mes-fiches" element={<MyCards />} />
+        <Route path="/fill-blank" element={<FillBlank />} />
+        <Route path="/adventure" element={<Adventure />} />
       </Routes>
     </BrowserRouter>
   )

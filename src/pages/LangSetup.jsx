@@ -25,7 +25,7 @@ export default function LangSetup() {
   const confirm = () => {
     setNativeLang(native)
     setTargetLang(target)
-    navigate('/vocabulary')
+    navigate('/hub')
   }
 
   const langCard = (l, selected, onClick) => (

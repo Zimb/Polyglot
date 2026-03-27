@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react'
+import React, { useState, useMemo, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { getLang } from '../lib/languages'
+import useLocations from '../lib/useLocations'
 import useT from '../lib/useT'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -47,29 +48,180 @@ function retryGame(currentPairs) {
   }
 }
 
+// ─── SetupScreen ──────────────────────────────────────────────────────────────
+function SetupScreen({ targetLang, level, savedCards, onStart }) {
+  const locations = useLocations()
+  const [customLevel, setCustomLevel] = useState(level)
+  const [selectedLocation, setSelectedLocation] = useState(null)
+
+  // Card counts per location+level for the current target lang
+  const cardCounts = useMemo(() => {
+    const map = {}
+    savedCards
+      .filter(c => c.targetLang === targetLang)
+      .forEach(c => {
+        const key = `${c.location?.id ?? c.location_id ?? 'unknown'}|${c.level}`
+        map[key] = (map[key] ?? 0) + 1
+      })
+    return map
+  }, [savedCards, targetLang])
+
+  const getCount = (loc) => cardCounts[`${loc.id}|${customLevel}`] ?? 0
+
+  // Auto-select first available location when level changes
+  const firstAvailable = locations.find(l => getCount(l) >= N) ?? null
+  const effectiveLocation = selectedLocation && getCount(selectedLocation) >= N
+    ? selectedLocation
+    : firstAvailable
+
+  const canStart = effectiveLocation !== null
+
+  const targetObj = getLang(targetLang)
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: '#0C0A08' }}>
+      <Header />
+      <main className="flex-1 flex flex-col items-center justify-start px-6 py-8">
+        <div className="flex flex-col gap-6 max-w-md mx-auto w-full animate-slide-up">
+          <div>
+            <p className="text-xs font-display uppercase tracking-widest mb-2"
+              style={{ color: '#4A3F35', letterSpacing: '0.12em' }}>polyglot</p>
+            <h1 className="font-display font-bold text-3xl" style={{ color: '#F0E6D3' }}>Relier</h1>
+            <p className="mt-1 text-sm" style={{ color: '#8A7A68' }}>
+              {targetObj?.flag} {targetObj?.nativeName}
+            </p>
+          </div>
+
+          {/* Niveau */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-display uppercase tracking-wider"
+              style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>Niveau</label>
+            <div className="flex gap-2">
+              {[
+                { key: 'beginner', label: 'Débutant' },
+                { key: 'intermediate', label: 'Intermédiaire' },
+                { key: 'advanced', label: 'Avancé' },
+              ].map(({ key, label }) => (
+                <button key={key} onClick={() => { setCustomLevel(key); setSelectedLocation(null) }}
+                  className="flex-1 py-2 font-display text-xs font-medium rounded-[8px] transition-colors"
+                  style={{
+                    background: customLevel === key ? '#C8920A' : '#1E1A15',
+                    border: customLevel === key ? '1px solid #C8920A' : '1px solid #2E2820',
+                    color: customLevel === key ? '#1A1410' : '#8A7A68',
+                  }}>{label}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Lieu */}
+          <div className="flex flex-col gap-2">
+            <label className="text-xs font-display uppercase tracking-wider"
+              style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>Lieu</label>
+            <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1"
+              style={{ scrollbarWidth: 'thin', scrollbarColor: '#2E2820 transparent' }}>
+              {locations.map(loc => {
+                const count = getCount(loc)
+                const locked = count < N
+                const sel = effectiveLocation?.id === loc.id
+                return (
+                  <button key={loc.id}
+                    onClick={() => { if (!locked) setSelectedLocation(loc) }}
+                    disabled={locked}
+                    className="relative py-3 px-3 text-left rounded-[8px] transition-colors"
+                    style={{
+                      background: locked ? '#111009' : sel ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                      border: locked ? '1px solid #181510' : sel ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                      opacity: locked ? 0.35 : 1,
+                      cursor: locked ? 'not-allowed' : 'pointer',
+                    }}>
+                    {count > 0 && (
+                      <span className="absolute top-1.5 right-1.5 font-mono text-xs font-bold px-1 rounded-[3px] leading-none"
+                        style={{ background: 'rgba(200,146,10,0.15)', color: '#C8920A', border: '1px solid rgba(200,146,10,0.3)', fontSize: '10px' }}>
+                        {count}
+                      </span>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span style={{ fontSize: '18px', lineHeight: 1 }}>{loc.emoji}</span>
+                      <span className="text-sm font-display" style={{ color: sel ? '#E8A820' : '#F0E6D3' }}>{loc.name}</span>
+                    </div>
+                    <p className="mt-1 text-xs leading-snug font-sans"
+                      style={{ color: sel ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : 0 }}>
+                      {locked ? `< ${N} cartes` : loc.desc}
+                    </p>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          <button
+            onClick={() => canStart && onStart({ level: customLevel, location: effectiveLocation })}
+            disabled={!canStart}
+            className="w-full py-4 font-display font-semibold text-base rounded-[8px]"
+            style={{
+              background: canStart ? '#C8920A' : '#1E1A15',
+              color: canStart ? '#1A1410' : '#3E3228',
+              border: canStart ? 'none' : '1px solid #2E2820',
+              cursor: canStart ? 'pointer' : 'not-allowed',
+            }}>
+            {canStart
+              ? `Jouer ${effectiveLocation.emoji} ${effectiveLocation.name} →`
+              : 'Pas assez de cartes (5 min.)'}
+          </button>
+        </div>
+      </main>
+    </div>
+  )
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Links() {
-  const { nativeLang, targetLang, savedCards } = useAppStore()
+  const { nativeLang, targetLang, level, savedCards } = useAppStore()
   const targetObj = getLang(targetLang)
   const t = useT()
   const location = useLocation()
   const alphCards = location.state?.alphCards ?? null
-  const returnTo = location.state?.returnTo ?? '/vocabulary'
+  const returnTo = location.state?.returnTo ?? '/hub'
+
+  const [phase, setPhase] = useState(alphCards ? 'playing' : 'setup')
+  const [config, setConfig] = useState(null)
 
   // Deduplicate by word to avoid same word appearing twice
   const eligible = useMemo(() => {
     if (alphCards) return alphCards
+    if (!config) return []
     const seen = new Set()
-    return savedCards.filter((c) => {
+    return savedCards.filter(c => {
       if (c.targetLang !== targetLang) return false
+      if (c.level !== config.level) return false
+      const locMatch = c.location?.id === config.location.id ||
+                       c.location?.name === config.location.name ||
+                       c.location_id === config.location.id
+      if (!locMatch) return false
       if (seen.has(c.word)) return false
       seen.add(c.word)
       return true
     })
-  }, [savedCards, targetLang, alphCards])
+  }, [savedCards, targetLang, alphCards, config])
 
-  const [game, setGame] = useState(() => initGame(eligible))
+  const handleStart = (cfg) => {
+    setConfig(cfg)
+    setPhase('playing')
+  }
+
+  // Game state — must be declared before any early returns (Rules of Hooks)
+  const [game, setGame] = useState(() => initGame([]))
   const { pairs, leftOrder, rightOrder, matches, selectedLeft, wrongFlash } = game
+
+  // Re-initialize game whenever eligible cards change (after config is set)
+  useEffect(() => {
+    if (eligible.length >= N) setGame(initGame(eligible))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligible])
+
+  if (phase === 'setup') {
+    return <SetupScreen targetLang={targetLang} level={level} savedCards={savedCards} onStart={handleStart} />
+  }
 
   const matchedSet = new Set(matches.map((m) => m.pairIdx))
 
@@ -135,6 +287,13 @@ export default function Links() {
             style={{ background: '#C8920A', color: '#1A1410', textDecoration: 'none' }}>
             {t('flashcards_btn')}
           </Link>
+          {!alphCards && (
+            <button onClick={() => setPhase('setup')}
+              className="font-display text-sm"
+              style={{ color: '#4A3F35', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
+              ← Changer de lieu
+            </button>
+          )}
         </main>
       </div>
     )
@@ -184,6 +343,13 @@ export default function Links() {
               Rejouer
             </button>
           </div>
+          {!alphCards && (
+            <button onClick={() => setPhase('setup')}
+              className="font-display text-sm"
+              style={{ color: '#4A3F35', textDecoration: 'underline', background: 'none', border: 'none', cursor: 'pointer' }}>
+              ← Changer de lieu
+            </button>
+          )}
           <Link to={returnTo}
             className="font-display text-sm"
             style={{ color: '#4A3F35', textDecoration: 'underline' }}>
@@ -322,7 +488,7 @@ function Header({ progress, t }) {
   return (
     <header className="flex items-center justify-between px-6 py-4"
       style={{ borderBottom: '1px solid #1E1A15' }}>
-      <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+      <Link to="/hub" style={{ textDecoration: 'none' }}>
         <span className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
           poly<span style={{ color: '#C8920A' }}>g</span>lot
         </span>

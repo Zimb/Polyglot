@@ -89,7 +89,7 @@ export default function MyCards() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4"
         style={{ borderBottom: '1px solid #1E1A15' }}>
-        <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+        <Link to="/hub" style={{ textDecoration: 'none' }}>
           <span className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
             poly<span style={{ color: '#C8920A' }}>g</span>lot
           </span>

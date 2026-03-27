@@ -13,7 +13,20 @@ export const LANGUAGES = [
   { code: 'nl', name: 'Dutch',      flag: '🇳🇱', nativeName: 'Nederlands' },
   { code: 'pl', name: 'Polish',     flag: '🇵🇱', nativeName: 'Polski' },
   { code: 'tr', name: 'Turkish',    flag: '🇹🇷', nativeName: 'Türkçe' },
-  { code: 'hi', name: 'Hindi',      flag: '🇮🇳', nativeName: 'हिन्दी' },
+  { code: 'hi', name: 'Hindi',       flag: '🇮🇳', nativeName: 'हिन्दी' },
+  { code: 'sv', name: 'Swedish',     flag: '🇸🇪', nativeName: 'Svenska' },
+  { code: 'no', name: 'Norwegian',   flag: '🇳🇴', nativeName: 'Norsk' },
+  { code: 'da', name: 'Danish',      flag: '🇩🇰', nativeName: 'Dansk' },
+  { code: 'fi', name: 'Finnish',     flag: '🇫🇮', nativeName: 'Suomi' },
+  { code: 'el', name: 'Greek',       flag: '🇬🇷', nativeName: 'Ελληνικά' },
+  { code: 'he', name: 'Hebrew',      flag: '🇮🇱', nativeName: 'עברית' },
+  { code: 'uk', name: 'Ukrainian',   flag: '🇺🇦', nativeName: 'Українська' },
+  { code: 'cs', name: 'Czech',       flag: '🇨🇿', nativeName: 'Čeština' },
+  { code: 'ro', name: 'Romanian',    flag: '🇷🇴', nativeName: 'Română' },
+  { code: 'hu', name: 'Hungarian',   flag: '🇭🇺', nativeName: 'Magyar' },
+  { code: 'vi', name: 'Vietnamese',  flag: '🇻🇳', nativeName: 'Tiếng Việt' },
+  { code: 'th', name: 'Thai',        flag: '🇹🇭', nativeName: 'ภาษาไทย' },
+  { code: 'id', name: 'Indonesian',  flag: '🇮🇩', nativeName: 'Bahasa Indonesia' },
 ]
 
 export const LOCATIONS = [

@@ -1,7 +1,8 @@
-import React, { useState, useCallback, useMemo } from 'react'
+import React, { useState, useCallback, useMemo, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
-import { LANGUAGES, LOCATIONS, getLang } from '../lib/languages'
+import { getLang } from '../lib/languages'
+import useLocations from '../lib/useLocations'
 import { supabase } from '../lib/supabase'
 import { syncCardsToSupabase } from '../lib/cards'
 
@@ -256,37 +257,51 @@ function CongratulationsCard({ location, total, targetLang, nativeLang, onRestar
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
 function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, discoveryMode, setDiscoveryMode }) {
-  const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0])
-  const [customNative, setCustomNative] = useState(nativeLang)
-  const [customTarget, setCustomTarget] = useState(targetLang)
+  const locations = useLocations()
+  const [selectedLocation, setSelectedLocation] = useState(locations[0])
   const [customLevel, setCustomLevel] = useState(level)
+  const [globalCount, setGlobalCount] = useState(null) // null = loading
+
+  // Fetch global_cards count for current lang pair + selected location + level.
+  // If no cards at all → force Discovery. Otherwise just unlock Library, keep current selection.
+  useEffect(() => {
+    setGlobalCount(null)
+    supabase
+      .from('global_cards')
+      .select('id', { count: 'exact', head: true })
+      .eq('target_lang', targetLang)
+      .eq('native_lang', nativeLang)
+      .eq('location_id', selectedLocation.name)
+      .eq('level', customLevel)
+      .then(({ count, error }) => {
+        const n = error ? null : (count ?? 0)
+        setGlobalCount(n)
+        const localCount = savedCards.filter(c =>
+          c.targetLang === targetLang &&
+          c.level === customLevel &&
+          (c.location?.name === selectedLocation.name || c.location_name === selectedLocation.name)
+        ).length
+        // Only force Discovery if there are truly no cards available
+        if (!error && n === 0 && localCount === 0) {
+          setDiscoveryMode(true)
+        }
+      })
+  }, [targetLang, nativeLang, selectedLocation, customLevel])
 
   // Count saved cards per location+level for the currently selected target language
   const cardCounts = useMemo(() => {
     const map = {}
     savedCards
-      .filter((c) => c.targetLang === customTarget)
+      .filter((c) => c.targetLang === targetLang)
       .forEach((c) => {
         const key = `${c.location?.id ?? 'unknown'}|${c.level}`
         map[key] = (map[key] ?? 0) + 1
       })
     return map
-  }, [savedCards, customTarget])
+  }, [savedCards, targetLang])
 
-  const nativeLangObj = getLang(customNative)
-  const targetLangObj = getLang(customTarget)
-
-  const selectStyle = {
-    background: '#1E1A15',
-    border: '1px solid #2E2820',
-    color: '#F0E6D3',
-    borderRadius: '8px',
-    padding: '10px 14px',
-    width: '100%',
-    fontSize: '14px',
-    outline: 'none',
-    fontFamily: "'DM Sans', system-ui, sans-serif",
-  }
+  const nativeLangObj = getLang(nativeLang)
+  const targetLangObj = getLang(targetLang)
 
   return (
     <div className="flex flex-col gap-6 max-w-md mx-auto w-full animate-slide-up">
@@ -304,32 +319,6 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
           <span style={{ color: '#4A3F35', margin: '0 8px' }}>→</span>
           {targetLangObj?.flag} {targetLangObj?.nativeName}
         </p>
-      </div>
-
-      {/* Langues */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-display uppercase tracking-wider"
-            style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
-            Ma langue
-          </label>
-          <select value={customNative} onChange={(e) => setCustomNative(e.target.value)} style={selectStyle}>
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>{l.flag} {l.nativeName}</option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs font-display uppercase tracking-wider"
-            style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
-            J'apprends
-          </label>
-          <select value={customTarget} onChange={(e) => setCustomTarget(e.target.value)} style={selectStyle}>
-            {LANGUAGES.filter((l) => l.code !== customNative).map((l) => (
-              <option key={l.code} value={l.code}>{l.flag} {l.nativeName}</option>
-            ))}
-          </select>
-        </div>
       </div>
 
       {/* Niveau */}
@@ -365,30 +354,36 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
         </label>
         <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1"
           style={{ scrollbarWidth: 'thin', scrollbarColor: '#2E2820 transparent' }}>
-          {LOCATIONS.map((loc) => {
+          {locations.map((loc) => {
             const count = cardCounts[`${loc.id}|${customLevel}`] ?? 0
+            const locLocked = !discoveryMode && count === 0
+            const selected = selectedLocation.id === loc.id
             return (
-            <button key={loc.id} onClick={() => setSelectedLocation(loc)}
+            <button key={loc.id}
+              onClick={() => { if (!locLocked) setSelectedLocation(loc) }}
+              disabled={locLocked}
               className="relative py-3 px-3 text-left transition-colors rounded-[8px]"
               style={{
-                background: selectedLocation.id === loc.id ? 'rgba(200,146,10,0.10)' : '#1E1A15',
-                border: selectedLocation.id === loc.id ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                background: locLocked ? '#111009' : selected ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                border:     locLocked ? '1px solid #181510' : selected ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                opacity:    locLocked ? 0.35 : 1,
+                cursor:     locLocked ? 'not-allowed' : 'pointer',
               }}>
               {count > 0 && (
-                <span className="absolute top-2 right-2 font-display font-bold text-xs leading-none"
-                  style={{ color: '#C8920A' }}>
+                <span className="absolute top-1.5 right-1.5 font-mono text-xs font-bold px-1 py-0 rounded-[3px] leading-none"
+                  style={{ background: 'rgba(200,146,10,0.15)', color: '#C8920A', border: '1px solid rgba(200,146,10,0.3)', fontSize: '10px' }}>
                   {count}
                 </span>
               )}
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: '18px', lineHeight: 1 }}>{loc.emoji}</span>
                 <span className="text-sm font-display"
-                  style={{ color: selectedLocation.id === loc.id ? '#E8A820' : '#F0E6D3' }}>
+                  style={{ color: selected ? '#E8A820' : '#F0E6D3' }}>
                   {loc.name}
                 </span>
               </div>
               <p className="mt-1 text-xs leading-snug font-sans"
-                style={{ color: selectedLocation.id === loc.id ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : '0' }}>
+                style={{ color: selected ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : '0' }}>
                 {loc.desc}
               </p>
             </button>
@@ -406,23 +401,46 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
         <div className="flex gap-2">
           {[
             { key: true,  label: '✨ Découverte', desc: 'L\'IA génère de nouveaux mots' },
-            { key: false, label: '📚 Bibliothèque', desc: 'Depuis la base commune' },
+            { key: false, label: '📚 Bibliothèque', desc: 'Depuis ta collection' },
           ].map(({ key, label, desc }) => {
-            const active = discoveryMode === key
+            const isLibrary = key === false
+            const localCount = savedCards.filter(c =>
+              c.targetLang === targetLang &&
+              c.level === customLevel &&
+              (c.location?.name === selectedLocation.name || c.location_name === selectedLocation.name)
+            ).length
+            const displayCount = globalCount > 0 ? globalCount : localCount
+            // Disabled only when we know for sure there are no cards (both sources checked)
+            // While loading (null), still allow if local cards exist
+            const libDisabled = isLibrary && (
+              (globalCount === null && localCount === 0) ||
+              (globalCount !== null && globalCount === 0 && localCount === 0)
+            )
+            const active = discoveryMode === key && !libDisabled
             return (
-              <button key={String(key)} onClick={() => setDiscoveryMode(key)}
-                className="flex-1 py-3 px-3 text-left transition-colors rounded-[8px]"
+              <button key={String(key)}
+                onClick={() => { if (!libDisabled) setDiscoveryMode(key) }}
+                className="flex-1 py-3 px-3 text-left transition-colors rounded-[8px] relative"
+                disabled={libDisabled}
                 style={{
-                  background: active ? 'rgba(200,146,10,0.10)' : '#1E1A15',
-                  border: active ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                  background: libDisabled ? '#141210' : active ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                  border: libDisabled ? '1px solid #1E1A15' : active ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                  cursor: libDisabled ? 'not-allowed' : 'pointer',
+                  opacity: libDisabled ? 0.45 : 1,
                 }}>
+                {isLibrary && displayCount > 0 && (
+                  <span className="absolute top-2 right-2 font-mono text-xs font-bold px-1.5 py-0.5 rounded-[4px] leading-none"
+                    style={{ background: 'rgba(200,146,10,0.15)', color: '#C8920A', border: '1px solid rgba(200,146,10,0.3)' }}>
+                    {displayCount}
+                  </span>
+                )}
                 <p className="font-display text-sm font-medium"
-                  style={{ color: active ? '#E8A820' : '#8A7A68' }}>
+                  style={{ color: libDisabled ? '#3A3028' : active ? '#E8A820' : '#8A7A68' }}>
                   {label}
                 </p>
                 <p className="text-xs font-sans mt-0.5"
-                  style={{ color: active ? 'rgba(232,168,32,0.65)' : '#4A3F35' }}>
-                  {desc}
+                  style={{ color: libDisabled ? '#2A2018' : active ? 'rgba(232,168,32,0.65)' : '#4A3F35' }}>
+                  {isLibrary && libDisabled ? 'Aucun mot disponible' : desc}
                 </p>
               </button>
             )
@@ -431,7 +449,7 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
       </div>
 
       <button
-        onClick={() => onStart({ native: customNative, target: customTarget, level: customLevel, location: selectedLocation })}
+        onClick={() => onStart({ native: nativeLang, target: targetLang, level: customLevel, location: selectedLocation })}
         className="w-full py-4 font-display font-semibold text-base rounded-[8px] transition-colors"
         style={{ background: '#C8920A', color: '#1A1410' }}>
         Entrer {selectedLocation.emoji} {selectedLocation.name} →
@@ -491,11 +509,25 @@ export default function Vocabulary() {
         if (!res.ok) throw new Error(body.error || `Erreur serveur ${res.status}`)
 
         if (!body.cards || body.cards.length === 0) {
-          throw new Error(
-            `Aucun mot disponible pour « ${location.name} » en mode Bibliothèque.\n✨ Essayez le mode Découverte pour être le premier à explorer ce lieu !`
-          )
+          // Fall back to local saved cards for this location if global pool is empty
+          const localFallback = savedCards
+            .filter(c => c.targetLang === target && c.level === lvl)
+            .map(c => ({
+              word: c.word,
+              phonetic: c.phonetic ?? null,
+              translation: c.translation,
+              example: c.example ?? null,
+              exampleTranslation: c.exampleTranslation ?? null,
+            }))
+          if (localFallback.length === 0) {
+            throw new Error(
+              `Aucun mot disponible pour « ${location.name} » en mode Bibliothèque.\n✨ Essayez le mode Découverte pour être le premier à explorer ce lieu !`
+            )
+          }
+          fetched = localFallback.sort(() => Math.random() - 0.5).slice(0, newCount)
+        } else {
+          fetched = body.cards
         }
-        fetched = body.cards
       } else {
         // ── Discovery mode: generate new cards via AI ───────────────────
         const res = await fetch('/api/flashcard', {
@@ -596,7 +628,7 @@ export default function Vocabulary() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4"
         style={{ borderBottom: '1px solid #1E1A15' }}>
-        <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+        <Link to="/hub" style={{ textDecoration: 'none' }}>
           <span className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
             poly<span style={{ color: '#C8920A' }}>g</span>lot
           </span>

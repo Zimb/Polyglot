@@ -29,10 +29,12 @@ try {
 
 // ── Dynamically import all handlers from /api ─────────────────────────────────
 async function loadHandlers() {
-  const { default: flashcard } = await import('./api/flashcard.js')
-  const { default: alphabet }  = await import('./api/alphabet.js')
-  const { default: cards }     = await import('./api/cards.js')
-  return { flashcard, alphabet, cards }
+  const { default: flashcard }          = await import('./api/flashcard.js')
+  const { default: alphabet }            = await import('./api/alphabet.js')
+  const { default: cards }               = await import('./api/cards.js')
+  const { default: dialogue }            = await import('./api/dialogue.js')
+  const { default: adventureDialogue }   = await import('./api/adventure-dialogue.js')
+  return { flashcard, alphabet, cards, dialogue, adventureDialogue }
 }
 
 const app = express()
@@ -41,9 +43,11 @@ app.use(express.json())
 const handlers = await loadHandlers()
 
 // Map each handler to its route
-app.all('/api/flashcard', (req, res) => handlers.flashcard(req, res))
-app.all('/api/alphabet',  (req, res) => handlers.alphabet(req, res))
-app.all('/api/cards',     (req, res) => handlers.cards(req, res))
+app.all('/api/flashcard',           (req, res) => handlers.flashcard(req, res))
+app.all('/api/alphabet',            (req, res) => handlers.alphabet(req, res))
+app.all('/api/cards',               (req, res) => handlers.cards(req, res))
+app.all('/api/dialogue',            (req, res) => handlers.dialogue(req, res))
+app.all('/api/adventure-dialogue',  (req, res) => handlers.adventureDialogue(req, res))
 
 // ── Start ────────────────────────────────────────────────────────────────────
 const PORT = 3001

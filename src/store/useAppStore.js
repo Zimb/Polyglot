@@ -51,18 +51,32 @@ const useAppStore = create(
       //   'standard'  — browse existing global card pool (free)
       discoveryMode: true,
       setDiscoveryMode: (v) => set({ discoveryMode: Boolean(v) }),
+
+      // Saved dialogues — completed FillBlank sessions (for Library mode replay)
+      savedDialogues: [],
+      addSavedDialogue: (dialogue) => set((s) => ({
+        savedDialogues: [...s.savedDialogues, { ...dialogue, savedAt: dialogue.savedAt ?? Date.now() }],
+      })),
+      // Merge remote dialogues fetched from Supabase into local store (dedup by savedAt)
+      mergeSavedDialogues: (remote) => set((s) => {
+        const localKeys = new Set(s.savedDialogues.map((d) => d.savedAt))
+        const newOnes = remote.filter((d) => !localKeys.has(d.savedAt))
+        if (!newOnes.length) return {}
+        return { savedDialogues: [...s.savedDialogues, ...newOnes] }
+      }),
     }),
     {
       name: 'polyglot-store',
       // Keep deviceId stable across store resets
       partialize: (state) => ({
-        deviceId:      state.deviceId,
-        nativeLang:    state.nativeLang,
-        targetLang:    state.targetLang,
-        level:         state.level,
-        savedCards:    state.savedCards,
-        alphabetCards: state.alphabetCards,
-        discoveryMode: state.discoveryMode,
+        deviceId:       state.deviceId,
+        nativeLang:     state.nativeLang,
+        targetLang:     state.targetLang,
+        level:          state.level,
+        savedCards:     state.savedCards,
+        alphabetCards:  state.alphabetCards,
+        discoveryMode:  state.discoveryMode,
+        savedDialogues: state.savedDialogues,
       }),
     }
   )
