@@ -255,7 +255,7 @@ function CongratulationsCard({ location, total, targetLang, nativeLang, onRestar
 }
 
 // ─── Setup ────────────────────────────────────────────────────────────────────
-function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart }) {
+function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, discoveryMode, setDiscoveryMode }) {
   const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0])
   const [customNative, setCustomNative] = useState(nativeLang)
   const [customTarget, setCustomTarget] = useState(targetLang)
@@ -634,7 +634,7 @@ export default function Vocabulary() {
         )}
 
         {phase === 'setup' && (
-          <SetupScreen nativeLang={nativeLang} targetLang={targetLang} level={level} savedCards={savedCards} onStart={startSession} />
+          <SetupScreen nativeLang={nativeLang} targetLang={targetLang} level={level} savedCards={savedCards} onStart={startSession} discoveryMode={discoveryMode} setDiscoveryMode={setDiscoveryMode} />
         )}
 
         {phase === 'loading' && (
