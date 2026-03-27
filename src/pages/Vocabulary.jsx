@@ -1,287 +1,481 @@
-import React, { useState, useCallback } from 'react'
+import React, { useState, useCallback, useMemo } from 'react'
+import { Link } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
-import { LANGUAGES, FLASHCARD_THEMES, getLang } from '../lib/languages'
+import { LANGUAGES, LOCATIONS, getLang } from '../lib/languages'
 import { supabase } from '../lib/supabase'
+import { syncCardsToSupabase } from '../lib/cards'
 
-// ─── FlashCard component ──────────────────────────────────────────────────────
-function FlashCard({ card, index, total, onKnew, onDidntKnow }) {
+// ─── FlashCard ────────────────────────────────────────────────────────────────
+function FlashCard({ card, index, total, level, onKnew, onDidntKnow }) {
   const [flipped, setFlipped] = useState(false)
+  const cardLabel = level === 'advanced' ? 'dialogue' : level === 'intermediate' ? 'expression' : 'vocabulaire'
 
   const flip = () => setFlipped((f) => !f)
 
   const handleKnew = () => {
     setFlipped(false)
-    setTimeout(() => onKnew(card), 300)
+    setTimeout(() => onKnew(card), 280)
   }
-
   const handleDidntKnow = () => {
     setFlipped(false)
-    setTimeout(() => onDidntKnow(card), 300)
+    setTimeout(() => onDidntKnow(card), 280)
   }
 
   return (
-    <div className="flex flex-col items-center gap-6 w-full max-w-lg mx-auto animate-slide-up">
-      {/* Progress indicator */}
-      <p className="text-sm text-zinc-400">
-        Card {index + 1} / {total}
-      </p>
+    <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-slide-up">
 
-      {/* The card */}
+      {/* Card */}
       <div
-        className="card-scene w-full h-64 cursor-pointer select-none"
+        className="card-scene w-full h-72 cursor-pointer select-none"
         onClick={flip}
         role="button"
-        aria-label="Flip card"
+        aria-label="Retourner la carte"
       >
         <div className={`card-inner ${flipped ? 'flipped' : ''}`}>
-          {/* Front — target language word */}
-          <div className="card-face bg-gradient-to-br from-indigo-600 to-violet-700 flex flex-col items-center justify-center p-8 shadow-2xl">
-            <span className="text-4xl font-bold text-white text-center leading-tight">
-              {card.word}
-            </span>
-            {card.phonetic && (
-              <span className="mt-3 text-indigo-200 text-sm tracking-wider">
-                [{card.phonetic}]
+
+          {/* Recto — fond papier crème */}
+          <div className="card-face flex flex-col justify-between p-6"
+            style={{ background: '#F5EDD8', boxShadow: '0 8px 40px rgba(0,0,0,0.45)' }}>
+            {/* Numéro */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-display uppercase tracking-widest"
+                  style={{ color: '#B0A090', letterSpacing: '0.12em' }}>
+                  {cardLabel}
+                </span>
+                {card.isReview && (
+                  <span className="text-xs font-mono px-1.5 py-0.5 rounded"
+                    style={{ background: 'rgba(176,160,144,0.15)', color: '#B0A090', fontSize: '10px', letterSpacing: '0.06em' }}>
+                    révision
+                  </span>
+                )}
+              </div>
+              <span className="text-xs font-display" style={{ color: '#B0A090' }}>
+                {index + 1} / {total}
               </span>
-            )}
-            <span className="mt-6 text-indigo-300 text-xs">tap to reveal</span>
-          </div>
-
-          {/* Back — translation + example */}
-          <div className="card-back card-face bg-gradient-to-br from-emerald-600 to-teal-700 flex flex-col items-center justify-center p-8 shadow-2xl">
-            <span className="text-3xl font-bold text-white text-center">
-              {card.translation}
-            </span>
-            <div className="mt-5 text-center">
-              <p className="text-emerald-100 text-sm italic">"{card.example}"</p>
-              <p className="text-emerald-200 text-xs mt-1">"{card.exampleTranslation}"</p>
             </div>
-            <span className="mt-4 text-emerald-300 text-xs">tap to flip back</span>
+
+            {/* Mot — héros */}
+            <div className="flex-1 flex flex-col items-center justify-center py-2">
+              <span className="font-mono text-center leading-none break-words w-full"
+                style={{
+                  color: '#1A1410',
+                  fontSize: card.word.length > 12 ? '42px' : card.word.length > 8 ? '56px' : '68px',
+                  fontWeight: 700,
+                }}>
+                {card.word}
+              </span>
+              {card.phonetic && (
+                <span className="mt-3 font-mono text-sm" style={{ color: '#7A6A58' }}>
+                  [{card.phonetic}]
+                </span>
+              )}
+            </div>
+
+            {/* Hint */}
+            <p className="text-center text-xs font-display" style={{ color: '#B0A090', letterSpacing: '0.05em' }}>
+              appuyez pour révéler
+            </p>
+          </div>
+
+          {/* Verso — fond ambre */}
+          <div className="card-back card-face flex flex-col justify-between p-6"
+            style={{ background: '#C8920A', boxShadow: '0 8px 40px rgba(0,0,0,0.45)' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-display uppercase tracking-widest"
+                style={{ color: 'rgba(26,20,16,0.55)', letterSpacing: '0.12em' }}>
+                traduction
+              </span>
+              <span className="text-xs font-display" style={{ color: 'rgba(26,20,16,0.55)' }}>
+                {index + 1} / {total}
+              </span>
+            </div>
+
+            <div className="flex-1 flex items-center justify-center">
+              <span className="font-display text-center leading-tight"
+                style={{
+                  color: '#1A1410',
+                  fontSize: card.translation.length > 14 ? '32px' : '44px',
+                  fontWeight: 700,
+                }}>
+                {card.translation}
+              </span>
+            </div>
+
+            <div style={{ borderTop: '1px solid rgba(26,20,16,0.18)', paddingTop: '12px' }}>
+              <p className="font-mono text-sm italic text-center leading-snug"
+                style={{ color: 'rgba(26,20,16,0.75)' }}>
+                "{card.example}"
+              </p>
+              <p className="font-mono text-xs text-center mt-1"
+                style={{ color: 'rgba(26,20,16,0.5)' }}>
+                "{card.exampleTranslation}"
+              </p>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Action buttons — only show when flipped */}
-      {flipped && (
-        <div className="flex gap-4 w-full animate-slide-up">
-          <button
-            onClick={handleDidntKnow}
-            className="flex-1 py-3 rounded-xl bg-red-500/20 border border-red-500/40 text-red-400 font-semibold hover:bg-red-500/30 transition-colors"
-          >
-            ✗ Didn't know
-          </button>
-          <button
-            onClick={handleKnew}
-            className="flex-1 py-3 rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 font-semibold hover:bg-emerald-500/30 transition-colors"
-          >
-            ✓ Knew it!
-          </button>
-        </div>
-      )}
-
-      {!flipped && (
-        <p className="text-zinc-500 text-sm">Tap the card to see the translation</p>
-      )}
-    </div>
-  )
-}
-
-// ─── ScoreScreen component ────────────────────────────────────────────────────
-function ScoreScreen({ knew, missed, total, theme, onRestart, onNewTheme }) {
-  const score = Math.round((knew / total) * 100)
-
-  const emoji =
-    score === 100 ? '🏆' : score >= 75 ? '🎉' : score >= 50 ? '👍' : '💪'
-
-  return (
-    <div className="flex flex-col items-center gap-6 max-w-md mx-auto text-center animate-slide-up">
-      <div className="text-6xl">{emoji}</div>
-      <h2 className="text-3xl font-bold text-white">Session complete!</h2>
-      <p className="text-zinc-400">Theme: <span className="text-indigo-400 capitalize">{theme}</span></p>
-
-      <div className="bg-zinc-800/60 border border-zinc-700 rounded-2xl p-6 w-full flex justify-around">
-        <div>
-          <p className="text-3xl font-bold text-emerald-400">{knew}</p>
-          <p className="text-xs text-zinc-400 mt-1">Knew</p>
-        </div>
-        <div className="w-px bg-zinc-700" />
-        <div>
-          <p className="text-3xl font-bold text-red-400">{missed}</p>
-          <p className="text-xs text-zinc-400 mt-1">Missed</p>
-        </div>
-        <div className="w-px bg-zinc-700" />
-        <div>
-          <p className="text-3xl font-bold text-violet-400">{score}%</p>
-          <p className="text-xs text-zinc-400 mt-1">Score</p>
-        </div>
-      </div>
-
-      <div className="flex gap-3 w-full">
+      {/* Flèches de navigation */}
+      <div className="flex items-center justify-between w-full" style={{ paddingTop: '4px' }}>
         <button
-          onClick={onRestart}
-          className="flex-1 py-3 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold transition-colors"
-        >
-          Retry same theme
+          onClick={handleDidntKnow}
+          className="flex items-center justify-center transition-transform active:scale-90"
+          style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#F5EDD8', color: '#1A1410', fontSize: '24px', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+          aria-label="Passer">
+          ←
         </button>
-        <button
-          onClick={onNewTheme}
-          className="flex-1 py-3 rounded-xl bg-zinc-700 hover:bg-zinc-600 text-white font-semibold transition-colors"
-        >
-          New theme
-        </button>
-      </div>
-    </div>
-  )
-}
-
-// ─── SetupScreen component ────────────────────────────────────────────────────
-function SetupScreen({ nativeLang, targetLang, level, onStart }) {
-  const [selectedTheme, setSelectedTheme] = useState(FLASHCARD_THEMES[0])
-  const [customNative, setCustomNative] = useState(nativeLang)
-  const [customTarget, setCustomTarget] = useState(targetLang)
-  const [customLevel, setCustomLevel] = useState(level)
-
-  const nativeLangObj = getLang(customNative)
-  const targetLangObj = getLang(customTarget)
-
-  return (
-    <div className="flex flex-col gap-6 max-w-lg mx-auto animate-slide-up">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold text-white">Vocabulary Flashcards</h1>
-        <p className="text-zinc-400 mt-2">
-          {nativeLangObj?.flag} {nativeLangObj?.nativeName} → {targetLangObj?.flag}{' '}
-          {targetLangObj?.nativeName}
+        <p className="text-xs font-display text-center" style={{ color: '#4A3F35', letterSpacing: '0.04em' }}>
+          {flipped ? 'passer  ·  suivant' : 'touchez pour révéler'}
         </p>
+        <button
+          onClick={handleKnew}
+          className="flex items-center justify-center transition-transform active:scale-90"
+          style={{ width: '54px', height: '54px', borderRadius: '50%', background: '#C8920A', color: '#1A1410', fontSize: '24px', border: 'none', cursor: 'pointer', flexShrink: 0 }}
+          aria-label="Suivant">
+          →
+        </button>
       </div>
+    </div>
+  )
+}
 
-      {/* Language selectors */}
-      <div className="grid grid-cols-2 gap-3">
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-400 font-medium">Native language</label>
-          <select
-            value={customNative}
-            onChange={(e) => setCustomNative(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-          >
-            {LANGUAGES.map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.flag} {l.nativeName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label className="text-xs text-zinc-400 font-medium">Learning</label>
-          <select
-            value={customTarget}
-            onChange={(e) => setCustomTarget(e.target.value)}
-            className="bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500"
-          >
-            {LANGUAGES.filter((l) => l.code !== customNative).map((l) => (
-              <option key={l.code} value={l.code}>
-                {l.flag} {l.nativeName}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
+// ─── CongratulationsCard ─────────────────────────────────────────────────────
+const CONGRATS = {
+  en: 'Congratulations!',
+  fr: 'Félicitations !',
+  es: '¡Felicitaciones!',
+  de: 'Herzlichen Glückwunsch!',
+  it: 'Congratulazioni!',
+  pt: 'Parabéns!',
+  ja: 'おめでとうございます！',
+  zh: '恭喜！',
+  ar: '!تهانيّ',
+  ru: 'Поздравляем!',
+  ko: '축하합니다!',
+  nl: 'Gefeliciteerd!',
+  pl: 'Gratulacje!',
+  tr: 'Tebrikler!',
+  hi: 'बधाई हो!',
+}
 
-      {/* Level */}
-      <div className="flex flex-col gap-1">
-        <label className="text-xs text-zinc-400 font-medium">Level</label>
-        <div className="flex gap-2">
-          {['beginner', 'intermediate', 'advanced'].map((lvl) => (
-            <button
-              key={lvl}
-              onClick={() => setCustomLevel(lvl)}
-              className={`flex-1 py-2 rounded-xl text-sm font-semibold capitalize transition-colors border ${
-                customLevel === lvl
-                  ? 'bg-indigo-600 border-indigo-500 text-white'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-              }`}
-            >
-              {lvl}
-            </button>
-          ))}
-        </div>
-      </div>
+function CongratulationsCard({ location, total, targetLang, nativeLang, onRestart, onContinue, onNewTheme }) {
+  const [flipped, setFlipped] = useState(false)
+  const nativeText = CONGRATS[nativeLang] ?? 'Félicitations !'
+  const targetText = CONGRATS[targetLang] ?? CONGRATS['en']
 
-      {/* Theme picker */}
-      <div className="flex flex-col gap-2">
-        <label className="text-xs text-zinc-400 font-medium">Theme</label>
-        <div className="grid grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-          {FLASHCARD_THEMES.map((theme) => (
-            <button
-              key={theme}
-              onClick={() => setSelectedTheme(theme)}
-              className={`py-2 px-3 rounded-xl text-sm capitalize text-left transition-colors border ${
-                selectedTheme === theme
-                  ? 'bg-violet-600/30 border-violet-500 text-violet-300'
-                  : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:border-zinc-500'
-              }`}
-            >
-              {theme}
-            </button>
-          ))}
-        </div>
-      </div>
+  return (
+    <div className="flex flex-col items-center gap-5 w-full max-w-md mx-auto animate-slide-up">
 
-      <button
-        onClick={() =>
-          onStart({ native: customNative, target: customTarget, level: customLevel, theme: selectedTheme })
-        }
-        className="w-full py-4 rounded-2xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-lg transition-colors shadow-lg shadow-indigo-900/40"
+      {/* Card */}
+      <div
+        className="card-scene w-full h-72 cursor-pointer select-none"
+        onClick={() => setFlipped((f) => !f)}
+        role="button"
+        aria-label="Retourner la carte"
       >
-        Start session →
+        <div className={`card-inner ${flipped ? 'flipped' : ''}`}>
+
+          {/* Recto — fond papier crème, langue cible */}
+          <div className="card-face flex flex-col justify-between p-6"
+            style={{ background: '#F5EDD8', boxShadow: '0 8px 40px rgba(0,0,0,0.45)' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-display uppercase tracking-widest"
+                style={{ color: '#B0A090', letterSpacing: '0.12em' }}>
+                {location?.emoji} {location?.name}
+              </span>
+              <span className="text-xs font-display" style={{ color: '#B0A090' }}>
+                {total} / {total}
+              </span>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center py-2">
+              <span className="font-mono text-center leading-none break-words w-full"
+                style={{ color: '#1A1410', fontSize: '40px', fontWeight: 700 }}>
+                {targetText}
+              </span>
+            </div>
+            <p className="text-center text-xs font-display" style={{ color: '#B0A090', letterSpacing: '0.05em' }}>
+              appuyez pour révéler
+            </p>
+          </div>
+
+          {/* Verso — fond ambre, langue native */}
+          <div className="card-back card-face flex flex-col justify-between p-6"
+            style={{ background: '#C8920A', boxShadow: '0 8px 40px rgba(0,0,0,0.45)' }}>
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-display uppercase tracking-widest"
+                style={{ color: 'rgba(26,20,16,0.55)', letterSpacing: '0.12em' }}>
+                traduction
+              </span>
+              <span className="text-xs font-display" style={{ color: 'rgba(26,20,16,0.55)' }}>
+                {total} / {total}
+              </span>
+            </div>
+            <div className="flex-1 flex flex-col items-center justify-center gap-2">
+              <span className="font-display text-center leading-tight"
+                style={{ color: '#1A1410', fontSize: '42px', fontWeight: 700 }}>
+                {nativeText}
+              </span>
+              <span className="font-mono text-sm mt-1" style={{ color: 'rgba(26,20,16,0.6)' }}>
+                {total} cartes complétées
+              </span>
+            </div>
+            <div />
+          </div>
+        </div>
+      </div>
+
+      {/* Hint */}
+      <p className="text-xs font-display text-center" style={{ color: '#4A3F35', letterSpacing: '0.04em' }}>
+        {flipped ? 'session terminée' : 'touchez pour révéler'}
+      </p>
+
+      {/* Boutons */}
+      <div className="flex gap-3 w-full">
+        <button onClick={onRestart}
+          className="flex-1 py-3 font-display font-semibold text-sm rounded-[8px] transition-colors"
+          style={{ background: '#1E1A15', border: '1px solid #2E2820', color: '#F0E6D3' }}>
+          Reprendre
+        </button>
+        <button onClick={onContinue}
+          className="flex-1 py-3 font-display font-semibold text-sm rounded-[8px] transition-colors"
+          style={{ background: '#C8920A', color: '#1A1410' }}>
+          Continuer →
+        </button>
+      </div>
+
+      {/* Autre lieu */}
+      <button onClick={onNewTheme}
+        className="text-xs font-display transition-colors"
+        style={{ color: '#4A3F35', background: 'none', border: 'none', cursor: 'pointer' }}>
+        ← Changer de lieu
       </button>
     </div>
   )
 }
 
-// ─── Main Vocabulary page ─────────────────────────────────────────────────────
-export default function Vocabulary() {
-  const { nativeLang, targetLang, level, user, addSessionXP } = useAppStore()
+// ─── Setup ────────────────────────────────────────────────────────────────────
+function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart }) {
+  const [selectedLocation, setSelectedLocation] = useState(LOCATIONS[0])
+  const [customNative, setCustomNative] = useState(nativeLang)
+  const [customTarget, setCustomTarget] = useState(targetLang)
+  const [customLevel, setCustomLevel] = useState(level)
 
-  const [phase, setPhase] = useState('setup') // setup | loading | playing | score
+  // Count saved cards per location+level for the currently selected target language
+  const cardCounts = useMemo(() => {
+    const map = {}
+    savedCards
+      .filter((c) => c.targetLang === customTarget)
+      .forEach((c) => {
+        const key = `${c.location?.id ?? 'unknown'}|${c.level}`
+        map[key] = (map[key] ?? 0) + 1
+      })
+    return map
+  }, [savedCards, customTarget])
+
+  const nativeLangObj = getLang(customNative)
+  const targetLangObj = getLang(customTarget)
+
+  const selectStyle = {
+    background: '#1E1A15',
+    border: '1px solid #2E2820',
+    color: '#F0E6D3',
+    borderRadius: '8px',
+    padding: '10px 14px',
+    width: '100%',
+    fontSize: '14px',
+    outline: 'none',
+    fontFamily: "'DM Sans', system-ui, sans-serif",
+  }
+
+  return (
+    <div className="flex flex-col gap-6 max-w-md mx-auto w-full animate-slide-up">
+      {/* En-tête */}
+      <div>
+        <p className="text-xs font-display uppercase tracking-widest mb-2"
+          style={{ color: '#4A3F35', letterSpacing: '0.12em' }}>
+          polyglot
+        </p>
+        <h1 className="font-display font-bold text-3xl" style={{ color: '#F0E6D3' }}>
+          Flashcards
+        </h1>
+        <p className="mt-1 text-sm" style={{ color: '#8A7A68' }}>
+          {nativeLangObj?.flag} {nativeLangObj?.nativeName}
+          <span style={{ color: '#4A3F35', margin: '0 8px' }}>→</span>
+          {targetLangObj?.flag} {targetLangObj?.nativeName}
+        </p>
+      </div>
+
+      {/* Langues */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-display uppercase tracking-wider"
+            style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
+            Ma langue
+          </label>
+          <select value={customNative} onChange={(e) => setCustomNative(e.target.value)} style={selectStyle}>
+            {LANGUAGES.map((l) => (
+              <option key={l.code} value={l.code}>{l.flag} {l.nativeName}</option>
+            ))}
+          </select>
+        </div>
+        <div className="flex flex-col gap-1">
+          <label className="text-xs font-display uppercase tracking-wider"
+            style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
+            J'apprends
+          </label>
+          <select value={customTarget} onChange={(e) => setCustomTarget(e.target.value)} style={selectStyle}>
+            {LANGUAGES.filter((l) => l.code !== customNative).map((l) => (
+              <option key={l.code} value={l.code}>{l.flag} {l.nativeName}</option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Niveau */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-display uppercase tracking-wider"
+          style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
+          Niveau
+        </label>
+        <div className="flex gap-2">
+          {[
+            { key: 'beginner', label: 'Débutant' },
+            { key: 'intermediate', label: 'Intermédiaire' },
+            { key: 'advanced', label: 'Avancé' },
+          ].map(({ key, label }) => (
+            <button key={key} onClick={() => setCustomLevel(key)}
+              className="flex-1 py-2 font-display text-xs font-medium capitalize transition-colors rounded-[8px]"
+              style={{
+                background: customLevel === key ? '#C8920A' : '#1E1A15',
+                border: customLevel === key ? '1px solid #C8920A' : '1px solid #2E2820',
+                color: customLevel === key ? '#1A1410' : '#8A7A68',
+              }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Lieu */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-display uppercase tracking-wider"
+          style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
+          Où allez-vous ?
+        </label>
+        <div className="grid grid-cols-2 gap-2 max-h-52 overflow-y-auto pr-1"
+          style={{ scrollbarWidth: 'thin', scrollbarColor: '#2E2820 transparent' }}>
+          {LOCATIONS.map((loc) => {
+            const count = cardCounts[`${loc.id}|${customLevel}`] ?? 0
+            return (
+            <button key={loc.id} onClick={() => setSelectedLocation(loc)}
+              className="relative py-3 px-3 text-left transition-colors rounded-[8px]"
+              style={{
+                background: selectedLocation.id === loc.id ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                border: selectedLocation.id === loc.id ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+              }}>
+              {count > 0 && (
+                <span className="absolute top-2 right-2 font-display font-bold text-xs leading-none"
+                  style={{ color: '#C8920A' }}>
+                  {count}
+                </span>
+              )}
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: '18px', lineHeight: 1 }}>{loc.emoji}</span>
+                <span className="text-sm font-display"
+                  style={{ color: selectedLocation.id === loc.id ? '#E8A820' : '#F0E6D3' }}>
+                  {loc.name}
+                </span>
+              </div>
+              <p className="mt-1 text-xs leading-snug font-sans"
+                style={{ color: selectedLocation.id === loc.id ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : '0' }}>
+                {loc.desc}
+              </p>
+            </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <button
+        onClick={() => onStart({ native: customNative, target: customTarget, level: customLevel, location: selectedLocation })}
+        className="w-full py-4 font-display font-semibold text-base rounded-[8px] transition-colors"
+        style={{ background: '#C8920A', color: '#1A1410' }}>
+        Entrer {selectedLocation.emoji} {selectedLocation.name} →
+      </button>
+    </div>
+  )
+}
+
+// ─── Page principale ──────────────────────────────────────────────────────────
+export default function Vocabulary() {
+  const { nativeLang, targetLang, level, user, addSessionXP, addCards, deviceId, savedCards } = useAppStore()
+
+  const [phase, setPhase] = useState('setup')
   const [cards, setCards] = useState([])
   const [currentIndex, setCurrentIndex] = useState(0)
   const [knew, setKnew] = useState([])
   const [missed, setMissed] = useState([])
   const [error, setError] = useState(null)
   const [sessionConfig, setSessionConfig] = useState(null)
+  // Accumulate all words seen in this location across multiple sessions
+  const [seenWords, setSeenWords] = useState([])
 
-  const startSession = useCallback(async ({ native, target, level: lvl, theme }) => {
+  const startSession = useCallback(async ({ native, target, level: lvl, location, seen = [] }) => {
     setError(null)
     setPhase('loading')
-    setSessionConfig({ native, target, level: lvl, theme })
+    setSessionConfig({ native, target, level: lvl, location })
+
+    // Pick up to 2 random review cards from savedCards (same lang + level, not in current seen list)
+    const eligible = savedCards.filter(
+      (c) => c.targetLang === target && c.level === lvl && !seen.includes(c.word)
+    )
+    const reviewCards = eligible
+      .sort(() => Math.random() - 0.5)
+      .slice(0, Math.min(2, eligible.length))
+      .map((c) => ({ ...c, isReview: true }))
+    const newCount = 8 - reviewCards.length
 
     try {
       const res = await fetch('/api/flashcard', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetLang: target, nativeLang: native, level: lvl, theme }),
+        body: JSON.stringify({
+          targetLang: target,
+          nativeLang: native,
+          level: lvl,
+          location: location.name,
+          seenWords: seen,
+          newCount,
+        }),
       })
 
-      // Safe JSON parse — avoids crash when body is empty or HTML (e.g. 404 from dev server)
       const safeJson = async (r) => {
         const text = await r.text()
         if (!text) return {}
-        try { return JSON.parse(text) } catch { return { error: `Server returned: ${r.status} ${r.statusText}` } }
+        try { return JSON.parse(text) } catch { return { error: `Erreur serveur ${r.status}` } }
       }
 
       if (!res.ok) {
         const body = await safeJson(res)
-        throw new Error(body.error || `Server error ${res.status}`)
+        throw new Error(body.error || `Erreur serveur ${res.status}`)
       }
 
       const body = await safeJson(res)
       const fetched = body.cards
 
       if (!Array.isArray(fetched) || fetched.length === 0) {
-        throw new Error('No cards returned. Check your API key or try again.')
+        throw new Error('Aucune carte reçue. Vérifiez votre clé API.')
       }
 
-      setCards(fetched)
+      // Shuffle review cards into the new batch at random positions
+      const merged = [...fetched]
+      reviewCards.forEach((rc) => {
+        const pos = Math.floor(Math.random() * (merged.length + 1))
+        merged.splice(pos, 0, rc)
+      })
+
+      setCards(merged)
       setCurrentIndex(0)
       setKnew([])
       setMissed([])
@@ -290,110 +484,108 @@ export default function Vocabulary() {
       setError(err.message)
       setPhase('setup')
     }
-  }, [])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [savedCards])
 
-  const handleKnew = useCallback(
-    async (card) => {
-      const newKnew = [...knew, card]
-      setKnew(newKnew)
-      addSessionXP(10)
+  const handleKnew = useCallback(async (card) => {
+    const newKnew = [...knew, card]
+    setKnew(newKnew)
+    addSessionXP(10)
 
-      // Save word to Supabase if user is logged in
-      if (user?.id && sessionConfig) {
-        await supabase.from('learned_words').upsert(
-          {
-            user_id: user.id,
-            target_lang: sessionConfig.target,
-            word: card.word,
-            translation: card.translation,
-            mastery: 1,
-          },
-          { onConflict: 'user_id,target_lang,word', ignoreDuplicates: false }
-        )
-      }
+    if (user?.id && sessionConfig) {
+      await supabase.from('learned_words').upsert(
+        { user_id: user.id, target_lang: sessionConfig.target, word: card.word, translation: card.translation, mastery: 1 },
+        { onConflict: 'user_id,target_lang,word', ignoreDuplicates: false }
+      )
+    }
+    advance(newKnew, missed)
+  }, [knew, missed, addSessionXP, user, sessionConfig])
 
-      advanceOrFinish(newKnew, missed)
-    },
-    [knew, missed, addSessionXP, user, sessionConfig]
-  )
+  const handleDidntKnow = useCallback((card) => {
+    const newMissed = [...missed, card]
+    setMissed(newMissed)
+    advance(knew, newMissed)
+  }, [knew, missed])
 
-  const handleDidntKnow = useCallback(
-    (card) => {
-      const newMissed = [...missed, card]
-      setMissed(newMissed)
-      advanceOrFinish(knew, newMissed)
-    },
-    [knew, missed]
-  )
-
-  const advanceOrFinish = (k, m) => {
-    const next = k.length + m.length
-    if (next >= cards.length) {
-      setPhase('score')
+  const advance = (k, m) => {
+    if (k.length + m.length >= cards.length) {
+      // Persist full card objects with metadata before switching to score screen
+      const enriched = cards.map((c) => ({
+        ...c,
+        level: sessionConfig?.level ?? 'beginner',
+        location: sessionConfig?.location ?? null,
+        targetLang: sessionConfig?.target ?? targetLang,
+        savedAt: new Date().toISOString(),
+      }))
+      addCards(enriched)
+      // Sync to Supabase in background (non-blocking)
+      syncCardsToSupabase(enriched, deviceId)
+      // Record seen word strings for next-session dedup
+      const newWords = cards.map((c) => c.word)
+      setSeenWords((prev) => {
+        const merged = [...new Set([...prev, ...newWords])]
+        return merged
+      })
+      setPhase('congrats')
     } else {
-      setCurrentIndex(next)
+      setCurrentIndex(k.length + m.length)
     }
-  }
-
-  const restart = () => {
-    if (sessionConfig) {
-      startSession(sessionConfig)
-    }
-  }
-
-  const newTheme = () => {
-    setPhase('setup')
-    setCards([])
-    setKnew([])
-    setMissed([])
   }
 
   return (
-    <div className="min-h-screen bg-[#0f0f13] flex flex-col">
+    <div className="min-h-screen flex flex-col" style={{ background: '#0C0A08' }}>
+
       {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-800">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl">🗂️</span>
-          <span className="font-bold text-white text-lg">Flashcards</span>
-        </div>
+      <header className="flex items-center justify-between px-6 py-4"
+        style={{ borderBottom: '1px solid #1E1A15' }}>
+        <Link to="/vocabulary" style={{ textDecoration: 'none' }}>
+          <span className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
+            poly<span style={{ color: '#C8920A' }}>g</span>lot
+          </span>
+        </Link>
+        <Link to="/mes-fiches"
+          className="text-xs font-display px-3 py-1.5 rounded-[6px] transition-colors"
+          style={{ color: '#8A7A68', border: '1px solid #2E2820', background: '#1E1A15', textDecoration: 'none' }}>
+          Mes fiches
+        </Link>
         {phase === 'playing' && (
-          <div className="flex items-center gap-2">
-            {/* Progress bar */}
-            <div className="w-32 h-1.5 bg-zinc-700 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-indigo-500 rounded-full transition-all duration-500"
-                style={{ width: `${((knew.length + missed.length) / cards.length) * 100}%` }}
-              />
+          <div className="flex items-center gap-3">
+            <div className="w-28 h-1 rounded-full overflow-hidden" style={{ background: '#2E2820' }}>
+              <div className="h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${((knew.length + missed.length) / cards.length) * 100}%`,
+                  background: '#C8920A',
+                }} />
             </div>
-            <span className="text-xs text-zinc-400">
+            <span className="text-xs font-display" style={{ color: '#4A3F35' }}>
               {knew.length + missed.length}/{cards.length}
             </span>
           </div>
         )}
       </header>
 
-      {/* Main content */}
+      {/* Contenu */}
       <main className="flex-1 flex items-center justify-center px-6 py-10">
+
+        {/* Erreur */}
+        {error && phase === 'setup' && (
+          <div className="fixed top-5 left-1/2 -translate-x-1/2 px-5 py-3 rounded-[8px] text-sm font-sans z-50"
+            style={{ background: '#301A1A', border: '1px solid #603030', color: '#E08080' }}>
+            ⚠ {error}
+          </div>
+        )}
+
         {phase === 'setup' && (
-          <>
-            {error && (
-              <div className="fixed top-6 left-1/2 -translate-x-1/2 bg-red-900/80 border border-red-600 text-red-200 text-sm px-5 py-3 rounded-xl shadow-lg">
-                ⚠️ {error}
-              </div>
-            )}
-            <SetupScreen
-              nativeLang={nativeLang}
-              targetLang={targetLang}
-              level={level}
-              onStart={startSession}
-            />
-          </>
+          <SetupScreen nativeLang={nativeLang} targetLang={targetLang} level={level} savedCards={savedCards} onStart={startSession} />
         )}
 
         {phase === 'loading' && (
-          <div className="flex flex-col items-center gap-4 text-zinc-400 animate-pulse">
-            <div className="w-12 h-12 rounded-full border-4 border-indigo-500 border-t-transparent animate-spin" />
-            <p>Generating flashcards…</p>
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-8 h-8 rounded-full border-2 border-t-transparent animate-spin"
+              style={{ borderColor: '#C8920A', borderTopColor: 'transparent' }} />
+            <p className="text-sm font-display" style={{ color: '#4A3F35' }}>
+              {sessionConfig?.location?.emoji} Vous entrez dans {sessionConfig?.location?.name}…
+            </p>
           </div>
         )}
 
@@ -402,22 +594,30 @@ export default function Vocabulary() {
             card={cards[currentIndex]}
             index={currentIndex}
             total={cards.length}
+            level={sessionConfig?.level}
             onKnew={handleKnew}
             onDidntKnow={handleDidntKnow}
           />
         )}
 
-        {phase === 'score' && (
-          <ScoreScreen
-            knew={knew.length}
-            missed={missed.length}
+        {phase === 'congrats' && (
+          <CongratulationsCard
+            location={sessionConfig?.location}
             total={cards.length}
-            theme={sessionConfig?.theme}
-            onRestart={restart}
-            onNewTheme={newTheme}
+            targetLang={sessionConfig?.target}
+            nativeLang={sessionConfig?.native}
+            onRestart={() => {
+              setCurrentIndex(0)
+              setKnew([])
+              setMissed([])
+              setPhase('playing')
+            }}
+            onContinue={() => startSession({ ...sessionConfig, seen: seenWords })}
+            onNewTheme={() => { setPhase('setup'); setCards([]); setKnew([]); setMissed([]); setSeenWords([]) }}
           />
         )}
       </main>
     </div>
   )
 }
+

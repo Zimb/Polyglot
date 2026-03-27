@@ -16,25 +16,23 @@ export const LANGUAGES = [
   { code: 'hi', name: 'Hindi',      flag: '🇮🇳', nativeName: 'हिन्दी' },
 ]
 
-export const FLASHCARD_THEMES = [
-  'greetings & basics',
-  'numbers & counting',
-  'colors & shapes',
-  'food & drinks',
-  'family & relationships',
-  'body parts',
-  'days & months',
-  'weather & nature',
-  'travel & transport',
-  'shopping & money',
-  'work & professions',
-  'health & medicine',
-  'emotions & feelings',
-  'home & furniture',
-  'animals',
-  'sports & hobbies',
-  'technology',
-  'time & schedule',
+export const LOCATIONS = [
+  { id: 'restaurant',       name: 'Restaurant',           emoji: '🍽️',  desc: 'Commander, lire le menu, parler au serveur' },
+  { id: 'cafe',             name: 'Café / Brasserie',     emoji: '☕',   desc: 'Commander, passer du temps, rencontres' },
+  { id: 'musee',            name: 'Musée',                emoji: '🏛️',  desc: 'Visiter une expo, demander des informations' },
+  { id: 'parc',             name: 'Parc',                 emoji: '🌳',  desc: 'Se promener, décrire la nature, les loisirs' },
+  { id: 'parc_attractions', name: "Parc d'attractions",   emoji: '🎢',  desc: 'Acheter des billets, vivre les attractions' },
+  { id: 'supermarche',      name: 'Supermarché',          emoji: '🛒',  desc: 'Faire les courses, demander un produit, payer' },
+  { id: 'marche',           name: 'Marché',               emoji: '🧺',  desc: 'Fruits, légumes, artisanat, négocier les prix' },
+  { id: 'gare',             name: 'Gare / Aéroport',      emoji: '🚂',  desc: 'Billets, quais, directions, annonces' },
+  { id: 'hotel',            name: 'Hôtel',                emoji: '🏨',  desc: 'Réservation, check-in, demander des services' },
+  { id: 'medecin',          name: 'Chez le médecin',      emoji: '🏥',  desc: 'Symptômes, conseils médicaux, ordonnances' },
+  { id: 'pharmacie',        name: 'Pharmacie',            emoji: '💊',  desc: 'Demander un médicament, expliquer un problème' },
+  { id: 'plage',            name: 'Plage',                emoji: '🏖️',  desc: 'Activités balnéaires, demander son chemin' },
+  { id: 'cinema',           name: 'Cinéma / Théâtre',     emoji: '🎭',  desc: 'Réserver des places, parler des films' },
+  { id: 'rue',              name: 'Dans la rue',          emoji: '🗺️',  desc: 'Directions, transports, se repérer en ville' },
+  { id: 'bureau',           name: 'Bureau / Travail',     emoji: '💼',  desc: 'Réunions, emails, expressions professionnelles' },
+  { id: 'universite',       name: 'Université / École',   emoji: '📚',  desc: 'Cours, campus, relations entre étudiants' },
 ]
 
 export function getLang(code) {
