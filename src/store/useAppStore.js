@@ -38,16 +38,31 @@ const useAppStore = create(
       }),
       setSavedCards: (cards) => set({ savedCards: cards }),
       clearSavedCards: () => set({ savedCards: [] }),
+
+      // Alphabet cards — persisted per lang+script key (e.g. 'ja_hiragana')
+      alphabetCards: {},
+      setAlphabetCards: (key, cards) => set((s) => ({ alphabetCards: { ...s.alphabetCards, [key]: cards } })),
+      addAlphabetCards: (key, cards) => set((s) => ({
+        alphabetCards: { ...s.alphabetCards, [key]: [...(s.alphabetCards[key] ?? []), ...cards] },
+      })),
+
+      // Card generation mode:
+      //   'discovery' — AI generates new cards (future: paid feature)
+      //   'standard'  — browse existing global card pool (free)
+      discoveryMode: true,
+      setDiscoveryMode: (v) => set({ discoveryMode: Boolean(v) }),
     }),
     {
       name: 'polyglot-store',
       // Keep deviceId stable across store resets
       partialize: (state) => ({
-        deviceId:   state.deviceId,
-        nativeLang: state.nativeLang,
-        targetLang: state.targetLang,
-        level:      state.level,
-        savedCards: state.savedCards,
+        deviceId:      state.deviceId,
+        nativeLang:    state.nativeLang,
+        targetLang:    state.targetLang,
+        level:         state.level,
+        savedCards:    state.savedCards,
+        alphabetCards: state.alphabetCards,
+        discoveryMode: state.discoveryMode,
       }),
     }
   )

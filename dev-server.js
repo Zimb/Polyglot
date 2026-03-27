@@ -30,7 +30,9 @@ try {
 // ── Dynamically import all handlers from /api ─────────────────────────────────
 async function loadHandlers() {
   const { default: flashcard } = await import('./api/flashcard.js')
-  return { flashcard }
+  const { default: alphabet }  = await import('./api/alphabet.js')
+  const { default: cards }     = await import('./api/cards.js')
+  return { flashcard, alphabet, cards }
 }
 
 const app = express()
@@ -40,6 +42,8 @@ const handlers = await loadHandlers()
 
 // Map each handler to its route
 app.all('/api/flashcard', (req, res) => handlers.flashcard(req, res))
+app.all('/api/alphabet',  (req, res) => handlers.alphabet(req, res))
+app.all('/api/cards',     (req, res) => handlers.cards(req, res))
 
 // ── Start ────────────────────────────────────────────────────────────────────
 const PORT = 3001

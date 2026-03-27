@@ -3,12 +3,15 @@ import { Link } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { getLang } from '../lib/languages'
 import useT from '../lib/useT'
+import { getScripts } from '../lib/scripts'
 
 export default function Hub() {
-  const { nativeLang, targetLang, savedCards } = useAppStore()
+  const { nativeLang, targetLang, savedCards, alphabetCards } = useAppStore()
   const nativeObj = getLang(nativeLang)
   const targetObj = getLang(targetLang)
   const t = useT()
+
+  const scripts = getScripts(targetLang)
 
   const cardsForLang = savedCards.filter((c) => c.targetLang === targetLang).length
   const linksReady = cardsForLang >= 5
@@ -106,6 +109,41 @@ export default function Hub() {
             )
           })}
         </div>
+
+        {/* Alphabet section */}
+        {scripts.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-display uppercase tracking-widest"
+              style={{ color: '#4A3F35', letterSpacing: '0.12em' }}>
+              {t('alphabet_section')}
+            </p>
+            {scripts.map((script) => {
+              const cardCount = (alphabetCards[`${targetLang}_${script.id}`] ?? []).length
+              return (
+                <Link key={script.id} to={`/alphabet/${script.id}`} style={{ textDecoration: 'none' }}>
+                  <div className="rounded-[12px] p-5 flex items-center gap-4"
+                    style={{ background: '#1A1410', border: '1px solid #2E2820' }}>
+                    <div className="rounded-[10px] w-12 h-12 flex items-center justify-center flex-shrink-0"
+                      style={{ background: 'rgba(200,146,10,0.08)', border: '1px solid rgba(200,146,10,0.18)' }}>
+                      <span className="font-mono font-bold" style={{ fontSize: '22px', color: '#F0E6D3' }}>
+                        {script.char}
+                      </span>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-display font-semibold text-base" style={{ color: '#F0E6D3' }}>
+                        {script.label}
+                      </p>
+                      <p className="text-xs mt-0.5 font-sans" style={{ color: '#4A3F35' }}>
+                        {cardCount > 0 ? t('n_generated', { n: cardCount }) : t('not_generated')}
+                      </p>
+                    </div>
+                    <span style={{ color: '#4A3F35', fontSize: '18px', flexShrink: 0 }}>→</span>
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        )}
 
         {/* Coming soon */}
         <div className="flex flex-col gap-3">

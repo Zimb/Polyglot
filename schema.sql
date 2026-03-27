@@ -111,3 +111,40 @@ create index if not exists idx_saved_cards_device    on saved_cards (device_id);
 create index if not exists idx_saved_cards_level     on saved_cards (level);
 create index if not exists idx_saved_cards_location  on saved_cards (location_id);
 create index if not exists idx_saved_cards_lang      on saved_cards (target_lang);
+
+-- ─── 6. Global cards pool ─────────────────────────────────────────────────────
+-- Shared pool of all AI-generated cards. Any "Discovery mode" session contributes
+-- new unique cards here. "Standard mode" sessions read from this pool.
+-- Writes are server-side only (service role key). Reads are public.
+create table if not exists global_cards (
+  id                  uuid primary key default gen_random_uuid(),
+
+  word                text not null,
+  phonetic            text,
+  translation         text not null,
+  example             text,
+  example_translation text,
+
+  level               text not null check (level in ('beginner', 'intermediate', 'advanced')),
+  location_id         text not null,   -- location name string, e.g. 'Restaurant'
+  target_lang         text not null,
+  native_lang         text not null,
+
+  -- how many times this card was generated across all users (for quality sorting)
+  generated_count     integer not null default 1,
+  created_at          timestamptz not null default now(),
+
+  -- same word in same lang pair at same level is one canonical card
+  unique (word, target_lang, native_lang, level)
+);
+
+-- Public read, server-only write (service role bypasses RLS)
+alter table global_cards enable row level security;
+create policy "global_cards_read_all" on global_cards for select using (true);
+
+-- ─── Indexes ─────────────────────────────────────────────────────────────────
+-- Fast lookup for standard-mode browsing: lang + native + level + location
+create index if not exists idx_global_cards_browse
+  on global_cards (target_lang, native_lang, level, location_id);
+-- For admin analytics
+create index if not exists idx_global_cards_created on global_cards (created_at);

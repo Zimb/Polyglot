@@ -3,6 +3,7 @@
  * Body: { targetLang, nativeLang, level, theme }
  * Returns: { cards: [{ word, phonetic, translation, example, exampleTranslation }] }
  */
+import { supabaseAdmin } from '../lib/supabase-server.js'
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' })
@@ -131,6 +132,28 @@ Each object must have these exact keys:
 
     if (!Array.isArray(cards)) {
       return res.status(502).json({ error: 'Unexpected AI response format' })
+    }
+
+    // ── Sync new cards to the shared global pool ──────────────────────────────
+    // This feeds the "Standard mode" browsing. Non-blocking: a sync failure
+    // never breaks the response. Requires SUPABASE_SERVICE_ROLE_KEY in env.
+    if (supabaseAdmin) {
+      const globalRows = cards.map((c) => ({
+        word:                c.word,
+        phonetic:            c.phonetic ?? null,
+        translation:         c.translation,
+        example:             c.example ?? null,
+        example_translation: c.exampleTranslation ?? null,
+        level:               sLevel,
+        location_id:         sLocation,
+        target_lang:         sTargetLang,
+        native_lang:         sNativeLang,
+      }))
+      // On conflict: increment generated_count so popular cards sort higher
+      const { error: syncErr } = await supabaseAdmin
+        .from('global_cards')
+        .upsert(globalRows, { onConflict: 'word,target_lang,native_lang,level', ignoreDuplicates: false })
+      if (syncErr) console.error('[global_cards sync]', syncErr.message)
     }
 
     return res.status(200).json({ cards })

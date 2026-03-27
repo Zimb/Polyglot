@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { getLang } from '../lib/languages'
 import useT from '../lib/useT'
@@ -35,14 +35,30 @@ function initGame(eligible) {
   }
 }
 
+function retryGame(currentPairs) {
+  const n = currentPairs.length
+  return {
+    pairs: currentPairs,
+    leftOrder: shuffle([...Array(n).keys()]),
+    rightOrder: shuffle([...Array(n).keys()]),
+    matches: [],
+    selectedLeft: null,
+    wrongFlash: null,
+  }
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 export default function Links() {
   const { nativeLang, targetLang, savedCards } = useAppStore()
   const targetObj = getLang(targetLang)
   const t = useT()
+  const location = useLocation()
+  const alphCards = location.state?.alphCards ?? null
+  const returnTo = location.state?.returnTo ?? '/vocabulary'
 
   // Deduplicate by word to avoid same word appearing twice
   const eligible = useMemo(() => {
+    if (alphCards) return alphCards
     const seen = new Set()
     return savedCards.filter((c) => {
       if (c.targetLang !== targetLang) return false
@@ -50,7 +66,7 @@ export default function Links() {
       seen.add(c.word)
       return true
     })
-  }, [savedCards, targetLang])
+  }, [savedCards, targetLang, alphCards])
 
   const [game, setGame] = useState(() => initGame(eligible))
   const { pairs, leftOrder, rightOrder, matches, selectedLeft, wrongFlash } = game
@@ -114,7 +130,7 @@ export default function Links() {
               {t('cards_available', { n: eligible.length, total: N })}
             </p>
           </div>
-          <Link to="/flashcards"
+          <Link to={returnTo}
             className="px-5 py-3 font-display font-semibold text-sm rounded-[8px]"
             style={{ background: '#C8920A', color: '#1A1410', textDecoration: 'none' }}>
             {t('flashcards_btn')}
@@ -156,17 +172,23 @@ export default function Links() {
           </div>
           <div className="flex gap-3 w-full max-w-xs">
             <button
-              onClick={() => setGame(initGame(eligible))}
+              onClick={() => setGame(retryGame(pairs))}
               className="flex-1 py-3 font-display font-semibold text-sm rounded-[8px]"
               style={{ background: '#1E1A15', border: '1px solid #2E2820', color: '#F0E6D3' }}>
-              {t('play_again')}
+              Réessayer
             </button>
-            <Link to="/vocabulary"
-              className="flex-1 py-3 font-display font-semibold text-sm rounded-[8px] text-center"
-              style={{ background: '#C8920A', color: '#1A1410', textDecoration: 'none' }}>
-              {t('continue_btn')}
-            </Link>
+            <button
+              onClick={() => setGame(initGame(eligible))}
+              className="flex-1 py-3 font-display font-semibold text-sm rounded-[8px]"
+              style={{ background: '#C8920A', color: '#1A1410', border: 'none', cursor: 'pointer' }}>
+              Rejouer
+            </button>
           </div>
+          <Link to={returnTo}
+            className="font-display text-sm"
+            style={{ color: '#4A3F35', textDecoration: 'underline' }}>
+            Revenir au menu précédent
+          </Link>
         </main>
       </div>
     )

@@ -397,6 +397,39 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart }) {
         </div>
       </div>
 
+      {/* Mode de génération */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-display uppercase tracking-wider"
+          style={{ color: '#4A3F35', letterSpacing: '0.1em' }}>
+          Mode
+        </label>
+        <div className="flex gap-2">
+          {[
+            { key: true,  label: '✨ Découverte', desc: 'L\'IA génère de nouveaux mots' },
+            { key: false, label: '📚 Bibliothèque', desc: 'Depuis la base commune' },
+          ].map(({ key, label, desc }) => {
+            const active = discoveryMode === key
+            return (
+              <button key={String(key)} onClick={() => setDiscoveryMode(key)}
+                className="flex-1 py-3 px-3 text-left transition-colors rounded-[8px]"
+                style={{
+                  background: active ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                  border: active ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                }}>
+                <p className="font-display text-sm font-medium"
+                  style={{ color: active ? '#E8A820' : '#8A7A68' }}>
+                  {label}
+                </p>
+                <p className="text-xs font-sans mt-0.5"
+                  style={{ color: active ? 'rgba(232,168,32,0.65)' : '#4A3F35' }}>
+                  {desc}
+                </p>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
       <button
         onClick={() => onStart({ native: customNative, target: customTarget, level: customLevel, location: selectedLocation })}
         className="w-full py-4 font-display font-semibold text-base rounded-[8px] transition-colors"
@@ -409,7 +442,8 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart }) {
 
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function Vocabulary() {
-  const { nativeLang, targetLang, level, user, addSessionXP, addCards, deviceId, savedCards } = useAppStore()
+  const { nativeLang, targetLang, level, user, addSessionXP, addCards, deviceId, savedCards,
+          discoveryMode, setDiscoveryMode } = useAppStore()
 
   const [phase, setPhase] = useState('setup')
   const [cards, setCards] = useState([])
@@ -426,7 +460,7 @@ export default function Vocabulary() {
     setPhase('loading')
     setSessionConfig({ native, target, level: lvl, location })
 
-    // Pick up to 2 random review cards from savedCards (same lang + level, not in current seen list)
+    // Pick up to 2 random review cards (both modes benefit from review)
     const eligible = savedCards.filter(
       (c) => c.targetLang === target && c.level === lvl && !seen.includes(c.word)
     )
@@ -437,38 +471,62 @@ export default function Vocabulary() {
     const newCount = 8 - reviewCards.length
 
     try {
-      const res = await fetch('/api/flashcard', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          targetLang: target,
-          nativeLang: native,
-          level: lvl,
-          location: location.name,
-          seenWords: seen,
-          newCount,
-        }),
-      })
+      let fetched
 
-      const safeJson = async (r) => {
-        const text = await r.text()
-        if (!text) return {}
-        try { return JSON.parse(text) } catch { return { error: `Erreur serveur ${r.status}` } }
-      }
+      if (!discoveryMode) {
+        // ── Standard mode: browse global card pool ───────────────────────
+        const res = await fetch('/api/cards', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetLang: target,
+            nativeLang: native,
+            level: lvl,
+            locationId: location.name,
+            seenWords: seen,
+            newCount,
+          }),
+        })
+        const body = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(body.error || `Erreur serveur ${res.status}`)
 
-      if (!res.ok) {
+        if (!body.cards || body.cards.length === 0) {
+          throw new Error(
+            `Aucun mot disponible pour « ${location.name} » en mode Bibliothèque.\n✨ Essayez le mode Découverte pour être le premier à explorer ce lieu !`
+          )
+        }
+        fetched = body.cards
+      } else {
+        // ── Discovery mode: generate new cards via AI ───────────────────
+        const res = await fetch('/api/flashcard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            targetLang: target,
+            nativeLang: native,
+            level: lvl,
+            location: location.name,
+            seenWords: seen,
+            newCount,
+          }),
+        })
+        const safeJson = async (r) => {
+          const text = await r.text()
+          if (!text) return {}
+          try { return JSON.parse(text) } catch { return { error: `Erreur serveur ${r.status}` } }
+        }
+        if (!res.ok) {
+          const body = await safeJson(res)
+          throw new Error(body.error || `Erreur serveur ${res.status}`)
+        }
         const body = await safeJson(res)
-        throw new Error(body.error || `Erreur serveur ${res.status}`)
+        fetched = body.cards
+        if (!Array.isArray(fetched) || fetched.length === 0) {
+          throw new Error('Aucune carte reçue. Vérifiez votre clé API.')
+        }
       }
 
-      const body = await safeJson(res)
-      const fetched = body.cards
-
-      if (!Array.isArray(fetched) || fetched.length === 0) {
-        throw new Error('Aucune carte reçue. Vérifiez votre clé API.')
-      }
-
-      // Shuffle review cards into the new batch at random positions
+      // Merge review cards into the batch at random positions
       const merged = [...fetched]
       reviewCards.forEach((rc) => {
         const pos = Math.floor(Math.random() * (merged.length + 1))
@@ -485,7 +543,7 @@ export default function Vocabulary() {
       setPhase('setup')
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [savedCards])
+  }, [savedCards, discoveryMode])
 
   const handleKnew = useCallback(async (card) => {
     const newKnew = [...knew, card]

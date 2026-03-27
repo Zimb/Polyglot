@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { fetchCardsFromSupabase, clearCardsFromSupabase } from '../lib/cards'
 import useT from '../lib/useT'
+import { getLang } from '../lib/languages'
 
 const LEVEL_COLORS = {
   beginner:     { bg: 'rgba(90,180,140,0.12)', border: 'rgba(90,180,140,0.3)',  text: '#90C8A0' },
@@ -14,6 +15,7 @@ export default function MyCards() {
   const { savedCards, clearSavedCards, setSavedCards, deviceId } = useAppStore()
   const t = useT()
 
+  const [filterLang, setFilterLang] = useState('all')
   const [filterLevel, setFilterLevel] = useState('all')
   const [filterLocation, setFilterLocation] = useState('all')
   const [expandedId, setExpandedId] = useState(null)
@@ -52,13 +54,26 @@ export default function MyCards() {
     return [...seen.values()]
   }, [savedCards])
 
+  const langs = useMemo(() => {
+    const seen = new Set()
+    return savedCards
+      .filter((c) => {
+        if (!c.targetLang || seen.has(c.targetLang)) return false
+        seen.add(c.targetLang)
+        return true
+      })
+      .map((c) => getLang(c.targetLang))
+      .filter(Boolean)
+  }, [savedCards])
+
   const filtered = useMemo(() => {
     return savedCards.filter((c) => {
+      if (filterLang !== 'all' && c.targetLang !== filterLang) return false
       if (filterLevel !== 'all' && c.level !== filterLevel) return false
       if (filterLocation !== 'all' && c.location?.id !== filterLocation) return false
       return true
     })
-  }, [savedCards, filterLevel, filterLocation])
+  }, [savedCards, filterLang, filterLevel, filterLocation])
 
   // Group filtered cards by level
   const grouped = useMemo(() => {
@@ -129,6 +144,32 @@ export default function MyCards() {
           <>
             {/* Filtres — niveaux */}
             <div className="flex flex-col gap-3">
+              {/* Filtres — langues */}
+              {langs.length > 1 && (
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={() => setFilterLang('all')}
+                    className="px-3 py-1.5 text-xs font-display rounded-full transition-colors"
+                    style={{
+                      background: filterLang === 'all' ? '#C8920A' : '#1E1A15',
+                      border: filterLang === 'all' ? '1px solid #C8920A' : '1px solid #2E2820',
+                      color: filterLang === 'all' ? '#1A1410' : '#8A7A68',
+                    }}>
+                    {t('all_languages')}
+                  </button>
+                  {langs.map((lang) => (
+                    <button key={lang.code} onClick={() => setFilterLang(lang.code)}
+                      className="px-3 py-1.5 text-xs font-display rounded-full transition-colors flex items-center gap-1.5"
+                      style={{
+                        background: filterLang === lang.code ? '#C8920A' : '#1E1A15',
+                        border: filterLang === lang.code ? '1px solid #C8920A' : '1px solid #2E2820',
+                        color: filterLang === lang.code ? '#1A1410' : '#8A7A68',
+                      }}>
+                      <span>{lang.flag}</span>
+                      <span>{lang.nativeName}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
               <div className="flex gap-2 flex-wrap">
                 {[{ key: 'all', labelKey: 'all_levels' },
                   { key: 'beginner', labelKey: 'beginner' },
