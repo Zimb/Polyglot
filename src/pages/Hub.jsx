@@ -36,7 +36,7 @@ export default function Hub() {
         <Link to="/mes-fiches"
           className="flex items-center gap-2 text-xs font-display px-3 py-1.5 rounded-[6px]"
           style={{ color: '#8A7A68', border: '1px solid #2E2820', background: '#1E1A15', textDecoration: 'none' }}>
-          {t('my_cards')}
+          {t('revise')}
           {cardsForLang > 0 && (
             <span className="font-mono font-bold" style={{ color: '#C8920A' }}>{cardsForLang}</span>
           )}

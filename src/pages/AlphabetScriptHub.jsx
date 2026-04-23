@@ -1,18 +1,24 @@
 import React from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useNavigate } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { getScript } from '../lib/scripts'
 import useT from '../lib/useT'
 
 export default function AlphabetScriptHub() {
   const { scriptId } = useParams()
-  const { targetLang, alphabetCards } = useAppStore()
+  const navigate = useNavigate()
+  const { targetLang, alphabetCards, setAlphabetCards } = useAppStore()
   const t = useT()
 
   const scriptDef = getScript(targetLang, scriptId)
   const key = `${targetLang}_${scriptId}`
   const cards = alphabetCards[key] ?? []
   const linksReady = cards.length >= 5
+
+  const handleReset = () => {
+    setAlphabetCards(key, [])
+    navigate(`/alphabet/${scriptId}/flashcards`)
+  }
 
   if (!scriptDef) {
     return (
@@ -73,9 +79,20 @@ export default function AlphabetScriptHub() {
             <p className="font-display font-bold text-lg" style={{ color: '#F0E6D3' }}>
               {scriptDef.label}
             </p>
-            <p className="text-xs font-sans mt-0.5" style={{ color: '#4A3F35' }}>
-              {cards.length > 0 ? t('n_generated', { n: cards.length }) : t('not_generated')}
-            </p>
+            <div className="flex items-center gap-2 mt-0.5">
+              <p className="text-xs font-sans" style={{ color: '#4A3F35' }}>
+                {cards.length > 0 ? t('n_generated', { n: cards.length }) : t('not_generated')}
+              </p>
+              {cards.length > 0 && (
+                <button
+                  onClick={handleReset}
+                  className="text-xs font-sans rounded-[4px] px-1.5 py-0.5 transition-colors"
+                  style={{ color: '#4A3F35', border: '1px solid #2E2820', background: 'transparent', cursor: 'pointer', lineHeight: 1 }}
+                  title="Supprimer les cartes pour régénérer">
+                  ↺
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

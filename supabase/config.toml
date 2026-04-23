@@ -1,0 +1,41 @@
+# Supabase CLI configuration — Polyglot
+# Généré une fois via `supabase init`, puis `supabase link --project-ref <ref>`.
+
+# Référence du projet (renseignée automatiquement par `supabase link`)
+project_id = "polyglot"
+
+# ── API locale (dev uniquement) ───────────────────────────────────────────────
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+# ── DB locale ─────────────────────────────────────────────────────────────────
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+# ── Studio local ──────────────────────────────────────────────────────────────
+[studio]
+enabled = true
+port = 54323
+
+# ── Auth locale ───────────────────────────────────────────────────────────────
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false
+
+# ── Edge Functions ─────────────────────────────────────────────────────────────
+# La fonction gère elle-même l'authentification via CRON_SECRET.
+[functions.seed-global-cards]
+verify_jwt = false

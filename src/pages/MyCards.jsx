@@ -115,10 +115,10 @@ export default function MyCards() {
         <div>
           <p className="text-xs font-display uppercase tracking-widest mb-1"
             style={{ color: '#4A3F35', letterSpacing: '0.12em' }}>
-            {t('library')}
+            {t('revise_section')}
           </p>
           <h1 className="font-display font-bold text-2xl" style={{ color: '#F0E6D3' }}>
-            {t('my_cards_title')}
+            {t('revise_title')}
           </h1>
         </div>
 

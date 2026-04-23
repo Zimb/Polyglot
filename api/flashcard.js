@@ -67,6 +67,35 @@ export default async function handler(req, res) {
   // How many new cards to generate (reduced when review cards are injected client-side)
   const cardCount = Math.max(1, Math.min(8, Number.isInteger(newCount) ? newCount : 8))
 
+  // ── Check global_cards pool first — skip LLM if enough cards already exist ──
+  if (supabaseAdmin) {
+    const { data: poolCards } = await supabaseAdmin
+      .from('global_cards')
+      .select('word, phonetic, translation, example, example_translation')
+      .eq('target_lang', sTargetLang)
+      .eq('native_lang', sNativeLang)
+      .eq('location_id', sLocation)
+      .eq('level', sLevel)
+      .limit(cardCount * 4)
+
+    if (poolCards && poolCards.length > 0) {
+      const available = poolCards.filter((c) => !safeSeenWords.includes(c.word))
+      if (available.length >= cardCount) {
+        const served = available.sort(() => Math.random() - 0.5).slice(0, cardCount)
+        return res.status(200).json({
+          cards: served.map((c) => ({
+            word:               c.word,
+            phonetic:           c.phonetic ?? null,
+            translation:        c.translation,
+            example:            c.example ?? null,
+            exampleTranslation: c.example_translation ?? null,
+          })),
+          fromPool: true,
+        })
+      }
+    }
+  }
+
   const avoidClause = safeSeenWords.length > 0
     ? `\nIMPORTANT: The learner has already seen these words/phrases — do NOT repeat them:\n${safeSeenWords.map((w) => `- ${w}`).join('\n')}\nGenerate ${cardCount} entirely new and different entries for this location.\n`
     : ''

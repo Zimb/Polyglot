@@ -5,9 +5,10 @@ import { getLang } from '../lib/languages'
 import useLocations from '../lib/useLocations'
 import { supabase } from '../lib/supabase'
 import { syncCardsToSupabase } from '../lib/cards'
+import { speak } from '../lib/tts'
 
 // ─── FlashCard ────────────────────────────────────────────────────────────────
-function FlashCard({ card, index, total, level, onKnew, onDidntKnow }) {
+function FlashCard({ card, index, total, level, targetLang, onKnew, onDidntKnow }) {
   const [flipped, setFlipped] = useState(false)
   const cardLabel = level === 'advanced' ? 'dialogue' : level === 'intermediate' ? 'expression' : 'vocabulaire'
 
@@ -73,10 +74,22 @@ function FlashCard({ card, index, total, level, onKnew, onDidntKnow }) {
               )}
             </div>
 
-            {/* Hint */}
-            <p className="text-center text-xs font-display" style={{ color: '#B0A090', letterSpacing: '0.05em' }}>
-              appuyez pour révéler
-            </p>
+            {/* TTS button */}
+            <button
+              onClick={(e) => { e.stopPropagation(); speak(card.word, targetLang) }}
+              className="flex items-center justify-center gap-2 px-4 py-2 rounded-[8px] font-display text-xs transition-colors"
+              style={{
+                background: 'rgba(176,160,144,0.15)',
+                border: '1px solid rgba(176,160,144,0.3)',
+                color: '#7A6A58',
+                cursor: 'pointer',
+              }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+              </svg>
+            </button>
           </div>
 
           {/* Verso — fond ambre */}
@@ -127,7 +140,7 @@ function FlashCard({ card, index, total, level, onKnew, onDidntKnow }) {
           ←
         </button>
         <p className="text-xs font-display text-center" style={{ color: '#4A3F35', letterSpacing: '0.04em' }}>
-          {flipped ? 'passer  ·  suivant' : 'touchez pour révéler'}
+          {flipped ? 'passer  ·  suivant' : ''}
         </p>
         <button
           onClick={handleKnew}
@@ -260,33 +273,41 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
   const locations = useLocations()
   const [selectedLocation, setSelectedLocation] = useState(locations[0])
   const [customLevel, setCustomLevel] = useState(level)
-  const [globalCount, setGlobalCount] = useState(null) // null = loading
+  // Map of "location_name|level" → card count for current lang pair
+  // One single DB query on mount / lang change instead of one per combo
+  const [globalCounts, setGlobalCounts] = useState(null) // null = loading
 
-  // Fetch global_cards count for current lang pair + selected location + level.
-  // If no cards at all → force Discovery. Otherwise just unlock Library, keep current selection.
   useEffect(() => {
-    setGlobalCount(null)
+    setGlobalCounts(null)
     supabase
       .from('global_cards')
-      .select('id', { count: 'exact', head: true })
+      .select('location_id, level')
       .eq('target_lang', targetLang)
       .eq('native_lang', nativeLang)
-      .eq('location_id', selectedLocation.name)
-      .eq('level', customLevel)
-      .then(({ count, error }) => {
-        const n = error ? null : (count ?? 0)
-        setGlobalCount(n)
+      .then(({ data, error }) => {
+        if (error || !data) { setGlobalCounts({}); return }
+        const counts = {}
+        data.forEach((row) => {
+          const k = `${row.location_id}|${row.level}`
+          counts[k] = (counts[k] ?? 0) + 1
+        })
+        setGlobalCounts(counts)
+        // Force Discovery if truly nothing available for default selection
         const localCount = savedCards.filter(c =>
           c.targetLang === targetLang &&
           c.level === customLevel &&
-          (c.location?.name === selectedLocation.name || c.location_name === selectedLocation.name)
+          (c.location?.id === selectedLocation.id || c.location?.name === selectedLocation.name)
         ).length
-        // Only force Discovery if there are truly no cards available
-        if (!error && n === 0 && localCount === 0) {
-          setDiscoveryMode(true)
-        }
+        const defaultKey = `${selectedLocation.id}|${customLevel}`
+        if (!counts[defaultKey] && localCount === 0) setDiscoveryMode(true)
       })
-  }, [targetLang, nativeLang, selectedLocation, customLevel])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [targetLang, nativeLang])
+
+  // Derived count for the currently selected combo
+  const globalCount = globalCounts === null
+    ? null
+    : (globalCounts[`${selectedLocation.id}|${customLevel}`] ?? 0)
 
   // Count saved cards per location+level for the currently selected target language
   const cardCounts = useMemo(() => {
@@ -359,34 +380,34 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
             const locLocked = !discoveryMode && count === 0
             const selected = selectedLocation.id === loc.id
             return (
-            <button key={loc.id}
-              onClick={() => { if (!locLocked) setSelectedLocation(loc) }}
-              disabled={locLocked}
-              className="relative py-3 px-3 text-left transition-colors rounded-[8px]"
-              style={{
-                background: locLocked ? '#111009' : selected ? 'rgba(200,146,10,0.10)' : '#1E1A15',
-                border:     locLocked ? '1px solid #181510' : selected ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
-                opacity:    locLocked ? 0.35 : 1,
-                cursor:     locLocked ? 'not-allowed' : 'pointer',
-              }}>
-              {count > 0 && (
-                <span className="absolute top-1.5 right-1.5 font-mono text-xs font-bold px-1 py-0 rounded-[3px] leading-none"
-                  style={{ background: 'rgba(200,146,10,0.15)', color: '#C8920A', border: '1px solid rgba(200,146,10,0.3)', fontSize: '10px' }}>
-                  {count}
-                </span>
-              )}
-              <div className="flex items-center gap-2">
-                <span style={{ fontSize: '18px', lineHeight: 1 }}>{loc.emoji}</span>
-                <span className="text-sm font-display"
-                  style={{ color: selected ? '#E8A820' : '#F0E6D3' }}>
-                  {loc.name}
-                </span>
-              </div>
-              <p className="mt-1 text-xs leading-snug font-sans"
-                style={{ color: selected ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : '0' }}>
-                {loc.desc}
-              </p>
-            </button>
+              <button key={loc.id}
+                onClick={() => { if (!locLocked) setSelectedLocation(loc) }}
+                disabled={locLocked}
+                className="relative py-3 px-3 text-left transition-colors rounded-[8px]"
+                style={{
+                  background: locLocked ? '#111009' : selected ? 'rgba(200,146,10,0.10)' : '#1E1A15',
+                  border: locLocked ? '1px solid #181510' : selected ? '1px solid rgba(200,146,10,0.4)' : '1px solid #2E2820',
+                  opacity: locLocked ? 0.35 : 1,
+                  cursor: locLocked ? 'not-allowed' : 'pointer',
+                }}>
+                {count > 0 && (
+                  <span className="absolute top-1.5 right-1.5 font-mono text-xs font-bold px-1 py-0 rounded-[3px] leading-none"
+                    style={{ background: 'rgba(200,146,10,0.15)', color: '#C8920A', border: '1px solid rgba(200,146,10,0.3)', fontSize: '10px' }}>
+                    {count}
+                  </span>
+                )}
+                <div className="flex items-center gap-2">
+                  <span style={{ fontSize: '18px', lineHeight: 1 }}>{loc.emoji}</span>
+                  <span className="text-sm font-display"
+                    style={{ color: selected ? '#E8A820' : '#F0E6D3' }}>
+                    {loc.name}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs leading-snug font-sans"
+                  style={{ color: selected ? 'rgba(232,168,32,0.65)' : '#4A3F35', paddingRight: count > 0 ? '20px' : '0' }}>
+                  {loc.desc}
+                </p>
+              </button>
             )
           })}
         </div>
@@ -400,14 +421,14 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
         </label>
         <div className="flex gap-2">
           {[
-            { key: true,  label: '✨ Découverte', desc: 'L\'IA génère de nouveaux mots' },
-            { key: false, label: '📚 Bibliothèque', desc: 'Depuis ta collection' },
+            { key: true,  label: '✨ Découverte', desc: 'Cartes partagées ou nouvelles si inédit' },
+            { key: false, label: '🌍 Bibliothèque', desc: 'Parcours les cartes de la communauté' },
           ].map(({ key, label, desc }) => {
             const isLibrary = key === false
             const localCount = savedCards.filter(c =>
               c.targetLang === targetLang &&
               c.level === customLevel &&
-              (c.location?.name === selectedLocation.name || c.location_name === selectedLocation.name)
+              (c.location?.id === selectedLocation.id || c.location?.name === selectedLocation.name)
             ).length
             const displayCount = globalCount > 0 ? globalCount : localCount
             // Disabled only when we know for sure there are no cards (both sources checked)
@@ -454,6 +475,13 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
         style={{ background: '#C8920A', color: '#1A1410' }}>
         Entrer {selectedLocation.emoji} {selectedLocation.name} →
       </button>
+
+      {/* Lien vers les révisions personnelles */}
+      <Link to="/mes-fiches"
+        className="text-xs font-display text-center transition-colors"
+        style={{ color: '#4A3F35', textDecoration: 'none' }}>
+        📖 Réviser mes fiches enregistrées →
+      </Link>
     </div>
   )
 }
@@ -461,7 +489,7 @@ function SetupScreen({ nativeLang, targetLang, level, savedCards, onStart, disco
 // ─── Page principale ──────────────────────────────────────────────────────────
 export default function Vocabulary() {
   const { nativeLang, targetLang, level, user, addSessionXP, addCards, deviceId, savedCards,
-          discoveryMode, setDiscoveryMode } = useAppStore()
+    discoveryMode, setDiscoveryMode } = useAppStore()
 
   const [phase, setPhase] = useState('setup')
   const [cards, setCards] = useState([])
@@ -574,7 +602,7 @@ export default function Vocabulary() {
       setError(err.message)
       setPhase('setup')
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [savedCards, discoveryMode])
 
   const handleKnew = useCallback(async (card) => {
@@ -685,6 +713,7 @@ export default function Vocabulary() {
             index={currentIndex}
             total={cards.length}
             level={sessionConfig?.level}
+            targetLang={sessionConfig?.target}
             onKnew={handleKnew}
             onDidntKnow={handleDidntKnow}
           />

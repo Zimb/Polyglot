@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 
+// Module-level TTL cache: avoids refetching saved cards on every navigation
+// { [deviceId]: { data: Card[], ts: number } }
+const _fetchCache = {}
+const CACHE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+
 /**
  * Upsert an array of enriched cards into saved_cards.
  * Each card must have: word, phonetic, translation, example, exampleTranslation,
@@ -7,6 +12,7 @@ import { supabase } from './supabase'
  */
 export async function syncCardsToSupabase(cards, deviceId) {
   if (!deviceId || !cards.length) return
+  delete _fetchCache[deviceId] // invalidate so next fetch gets fresh data
 
   const rows = cards.map((c) => ({
     device_id:           deviceId,
@@ -33,9 +39,13 @@ export async function syncCardsToSupabase(cards, deviceId) {
 /**
  * Fetch all saved cards for a device, ordered by saved_at desc.
  * Returns an array of enriched card objects (matching the local store shape).
+ * Results are cached for 5 minutes to avoid redundant DB calls on navigation.
  */
 export async function fetchCardsFromSupabase(deviceId) {
   if (!deviceId) return []
+
+  const cached = _fetchCache[deviceId]
+  if (cached && Date.now() - cached.ts < CACHE_TTL_MS) return cached.data
 
   const { data, error } = await supabase
     .from('saved_cards')
@@ -48,7 +58,7 @@ export async function fetchCardsFromSupabase(deviceId) {
     return []
   }
 
-  return (data ?? []).map((row) => ({
+  const result = (data ?? []).map((row) => ({
     word:               row.word,
     phonetic:           row.phonetic,
     translation:        row.translation,
@@ -61,6 +71,8 @@ export async function fetchCardsFromSupabase(deviceId) {
     targetLang: row.target_lang,
     savedAt:    row.saved_at,
   }))
+  _fetchCache[deviceId] = { data: result, ts: Date.now() }
+  return result
 }
 
 /**
@@ -68,6 +80,7 @@ export async function fetchCardsFromSupabase(deviceId) {
  */
 export async function clearCardsFromSupabase(deviceId) {
   if (!deviceId) return
+  delete _fetchCache[deviceId]
 
   const { error } = await supabase
     .from('saved_cards')
@@ -75,4 +88,47 @@ export async function clearCardsFromSupabase(deviceId) {
     .eq('device_id', deviceId)
 
   if (error) console.error('[clearCardsFromSupabase]', error.message)
+}
+
+// ─── Alphabet cards sync ──────────────────────────────────────────────────────
+
+/**
+ * Upsert alphabet/script cards for a given (device, lang, script) triple.
+ * Replaces the stored array entirely — call after setAlphabetCards or addAlphabetCards.
+ */
+export async function syncAlphabetCardsToSupabase(deviceId, targetLang, scriptId, cards) {
+  if (!deviceId || !cards.length) return
+
+  const { error } = await supabase
+    .from('alphabet_cards')
+    .upsert(
+      { device_id: deviceId, target_lang: targetLang, script_id: scriptId, cards, updated_at: new Date().toISOString() },
+      { onConflict: 'device_id,target_lang,script_id' }
+    )
+
+  if (error) console.error('[syncAlphabetCardsToSupabase]', error.message)
+}
+
+/**
+ * Fetch all alphabet card sets for a device.
+ * Returns an object mapping `${targetLang}_${scriptId}` → cards[].
+ */
+export async function fetchAlphabetCardsFromSupabase(deviceId) {
+  if (!deviceId) return {}
+
+  const { data, error } = await supabase
+    .from('alphabet_cards')
+    .select('target_lang, script_id, cards')
+    .eq('device_id', deviceId)
+
+  if (error) {
+    console.error('[fetchAlphabetCardsFromSupabase]', error.message)
+    return {}
+  }
+
+  const result = {}
+  for (const row of data ?? []) {
+    result[`${row.target_lang}_${row.script_id}`] = row.cards ?? []
+  }
+  return result
 }

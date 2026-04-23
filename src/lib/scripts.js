@@ -9,7 +9,7 @@ export const SCRIPTS = {
     { id: 'kanji_n5',   label: 'Kanji N5',     char: '漢', oneBatch: false, batchSize: 20 },
   ],
   ko: [
-    { id: 'hangul',     label: '한글',         char: '가', oneBatch: true,  totalCards: 40 },
+    { id: 'hangul',     label: '한글',         char: '가', oneBatch: false, batchSize: 20, totalCards: 40 },
   ],
   ar: [
     { id: 'arabic',     label: 'الأبجدية',    char: 'ا', oneBatch: true,  totalCards: 28 },

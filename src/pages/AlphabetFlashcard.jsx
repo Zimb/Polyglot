@@ -1,22 +1,44 @@
-import React, { useState, useCallback } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import React, { useState, useCallback, useEffect } from 'react'
+import { Link, useParams, useLocation } from 'react-router-dom'
 import useAppStore from '../store/useAppStore'
 import { getScript } from '../lib/scripts'
 import useT from '../lib/useT'
+import { speak } from '../lib/tts'
+import { syncAlphabetCardsToSupabase, fetchAlphabetCardsFromSupabase } from '../lib/cards'
 
 export default function AlphabetFlashcard() {
   const { scriptId } = useParams()
-  const { targetLang, nativeLang, alphabetCards, setAlphabetCards, addAlphabetCards } = useAppStore()
+  const { search } = useLocation()
+  const { targetLang, nativeLang, alphabetCards, setAlphabetCards, addAlphabetCards, deviceId } = useAppStore()
   const t = useT()
 
   const scriptDef = getScript(targetLang, scriptId)
   const key = `${targetLang}_${scriptId}`
   const cards = alphabetCards[key] ?? []
 
-  const [idx, setIdx] = useState(0)
+  const initialIdx = Math.max(0, parseInt(new URLSearchParams(search).get('i') ?? '0', 10))
+  const [idx, setIdx] = useState(initialIdx)
   const [flipped, setFlipped] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [restoring, setRestoring] = useState(false)
   const [error, setError] = useState(null)
+
+  // Restore from Supabase if localStorage is empty for this script
+  useEffect(() => {
+    if (cards.length > 0) return  // already in local store, nothing to do
+    let cancelled = false
+    setRestoring(true)
+    fetchAlphabetCardsFromSupabase(deviceId).then((remote) => {
+      if (cancelled) return
+      const remoteCards = remote[key]
+      if (remoteCards && remoteCards.length > 0) {
+        setAlphabetCards(key, remoteCards)
+      }
+      setRestoring(false)
+    })
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key])
 
   const generate = useCallback(async () => {
     if (loading) return
@@ -38,10 +60,13 @@ export default function AlphabetFlashcard() {
       const { cards: newCards } = await res.json()
       if (scriptDef?.oneBatch) {
         setAlphabetCards(key, newCards)
+        syncAlphabetCardsToSupabase(deviceId, targetLang, scriptId, newCards)
         setIdx(0)
       } else {
         const prevLen = cards.length
+        const merged = [...cards, ...newCards]
         addAlphabetCards(key, newCards)
+        syncAlphabetCardsToSupabase(deviceId, targetLang, scriptId, merged)
         // After state update, jump to the first new card
         setIdx(prevLen)
       }
@@ -50,7 +75,7 @@ export default function AlphabetFlashcard() {
     } finally {
       setLoading(false)
     }
-  }, [loading, cards.length, targetLang, nativeLang, scriptId, scriptDef, key, setAlphabetCards, addAlphabetCards])
+  }, [loading, cards, targetLang, nativeLang, scriptId, scriptDef, key, deviceId, setAlphabetCards, addAlphabetCards])
 
   const goTo = (newIdx) => {
     if (flipped) {
@@ -75,6 +100,13 @@ export default function AlphabetFlashcard() {
           <span style={{ fontSize: '72px', lineHeight: 1, color: '#F5EDD8', fontFamily: 'inherit' }}>
             {scriptDef?.char ?? '🔤'}
           </span>
+          {restoring ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="w-6 h-6 rounded-full border-2 animate-spin"
+                style={{ borderColor: '#C8920A', borderTopColor: 'transparent' }} />
+              <p className="text-sm font-display" style={{ color: '#4A3F35' }}>Restauration…</p>
+            </div>
+          ) : (
           <div>
             <p className="font-display font-bold text-xl" style={{ color: '#F0E6D3' }}>
               {scriptDef?.label}
@@ -83,12 +115,14 @@ export default function AlphabetFlashcard() {
               {t('generate_prompt')}
             </p>
           </div>
+          )}
           {error && (
             <p className="text-xs font-mono px-4 py-2 rounded-[6px]"
               style={{ color: '#E09898', background: 'rgba(224,128,128,0.08)', border: '1px solid rgba(224,128,128,0.2)' }}>
               {error}
             </p>
           )}
+          {!restoring && (
           <button
             onClick={generate}
             disabled={loading}
@@ -102,6 +136,7 @@ export default function AlphabetFlashcard() {
             }}>
             {loading ? t('loading') : t('generate_cards')}
           </button>
+          )}
         </main>
       </div>
     )
@@ -117,7 +152,7 @@ export default function AlphabetFlashcard() {
         progress={`${idx + 1} / ${cards.length}`}
       />
 
-      <main className="flex-1 flex flex-col items-center justify-center px-6 py-8 gap-8">
+      <main className="flex-1 flex flex-col items-center px-6 py-8 gap-8">
 
         {/* Flip card */}
         <div
@@ -148,10 +183,22 @@ export default function AlphabetFlashcard() {
               }}>
                 {currentCard.character}
               </span>
-              <p className="text-xs font-display uppercase tracking-widest"
-                style={{ color: '#3A3028', letterSpacing: '0.14em' }}>
-                {t('tap_to_reveal')}
-              </p>
+              <button
+                onClick={(e) => { e.stopPropagation(); speak(currentCard.character, targetLang) }}
+                className="flex items-center gap-2 px-4 py-2 rounded-[8px] font-display text-xs transition-colors"
+                style={{
+                  background: 'rgba(200,146,10,0.10)',
+                  border: '1px solid rgba(200,146,10,0.25)',
+                  color: '#C8920A',
+                  cursor: 'pointer',
+                }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+                  <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+                  <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+                </svg>
+                {t('listen')}
+              </button>
             </div>
 
             {/* Back: romanization + info */}
@@ -181,11 +228,13 @@ export default function AlphabetFlashcard() {
                 )}
               </div>
 
-              {/* Sound hint */}
+              {/* Sound hint — label adapts per script */}
               {currentCard.soundHint && (
                 <div style={{ paddingTop: '10px', flexShrink: 0 }}>
                   <p className="text-xs font-display uppercase mb-1" style={{ color: '#4A3F35', letterSpacing: '0.08em' }}>
-                    {t('sound')}
+                    {scriptId.startsWith('kanji') || scriptId.startsWith('hanzi')
+                      ? 'Lectures'
+                      : t('sound')}
                   </p>
                   <p className="text-sm font-sans" style={{ color: '#D4C4A8', lineHeight: 1.4 }}>
                     {currentCard.soundHint}
@@ -284,6 +333,21 @@ export default function AlphabetFlashcard() {
           <p className="text-xs font-sans text-center" style={{ color: '#4A3F35' }}>
             {t('load_next_batch')}
           </p>
+        )}
+
+        {/* Drawing practice link — only for drawable scripts */}
+        {cards.length > 0 && ['hiragana', 'katakana', 'kanji_n5', 'hangul', 'hanzi_hsk1'].includes(scriptId) && (
+          <Link to={`/alphabet/${scriptId}/draw?i=${idx}`}
+            className="flex items-center justify-center gap-2 w-full py-3 font-display text-sm font-medium rounded-[8px] transition-colors"
+            style={{
+              maxWidth: '320px',
+              background: 'rgba(200,146,10,0.08)',
+              border: '1px solid rgba(200,146,10,0.25)',
+              color: '#C8920A',
+              textDecoration: 'none',
+            }}>
+            ✍️ {t('draw_practice')}
+          </Link>
         )}
 
         {error && (

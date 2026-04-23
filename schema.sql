@@ -206,3 +206,22 @@ create policy "open access saved_dialogues" on saved_dialogues for all using (tr
 
 create index if not exists idx_saved_dialogues_device on saved_dialogues (device_id);
 create index if not exists idx_saved_dialogues_lang   on saved_dialogues (device_id, target_lang, level, location_id);
+
+-- ─── 9. Alphabet cards ────────────────────────────────────────────────────────
+-- Persists generated alphabet/kanji/script cards per device so they survive
+-- localStorage wipes and work across browsers.
+-- Key: (device_id, target_lang, script_id) — replaces the entire card array on update.
+create table if not exists alphabet_cards (
+  id          bigint primary key generated always as identity,
+  device_id   text        not null,
+  target_lang text        not null,
+  script_id   text        not null,   -- e.g. 'hiragana', 'katakana', 'kanji_n5'
+  cards       jsonb       not null default '[]'::jsonb,
+  updated_at  timestamptz not null default now(),
+  unique (device_id, target_lang, script_id)
+);
+
+alter table alphabet_cards enable row level security;
+create policy "open access alphabet_cards" on alphabet_cards for all using (true) with check (true);
+
+create index if not exists idx_alphabet_cards_device on alphabet_cards (device_id, target_lang);
